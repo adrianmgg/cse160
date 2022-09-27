@@ -19,6 +19,8 @@ function main() {
 
 const v1_x_input = document.getElementById('v1.x');
 const v1_y_input = document.getElementById('v1.y');
+const v2_x_input = document.getElementById('v2.x');
+const v2_y_input = document.getElementById('v2.y');
 const draw_button = document.getElementById('draw_button');
 draw_button.addEventListener('click', (e) => { handleDrawEvent(); });
 
@@ -29,6 +31,8 @@ function handleDrawEvent() {
 	ctx.fillRect(0, 0, 400, 400);
 	const v1 = new Vector3([v1_x_input.valueAsNumber, v1_y_input.valueAsNumber, 0]);
 	drawVector(v1, "red");
+	const v2 = new Vector3([v2_x_input.valueAsNumber, v2_y_input.valueAsNumber, 0]);
+	drawVector(v2, '#00F');
 }
 
 function drawVector(v, color) {

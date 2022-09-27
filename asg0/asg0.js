@@ -30,7 +30,7 @@ const operations = {
 	add: ['Add', (ctx, v1, v2) => {
 		const v3 = new Vector3();
 		v3.set(v1);
-		v3.sub(v2);
+		v3.add(v2);
 		drawVector(v3, '#0F0');
 	}],
 	sub: ['Subtract', (ctx, v1, v2) => {

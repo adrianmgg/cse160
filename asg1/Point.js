@@ -7,9 +7,7 @@ class Point {
 	}
 	
 	render() {
-		gl.enableVertexAttribArray(a_Position);
 		gl.bufferData(gl.ARRAY_BUFFER, this.pos, gl.DYNAMIC_DRAW);
-		// gl.vertexAttrib3fv(a_Position, this.pos);
 		gl.vertexAttrib1f(a_PointSize, this.size);
 		gl.uniform4fv(u_FragColor, this.color);
 		gl.drawArrays(gl.POINTS, 0, 1);

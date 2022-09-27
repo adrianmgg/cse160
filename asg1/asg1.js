@@ -23,6 +23,7 @@ let points = [];
 function main() {
 	setupWebGL();
 	setupShaders();
+	setupBuffers();
 	canvas.addEventListener('mousedown', click);
 	renderAll();
 }
@@ -69,6 +70,17 @@ function setupShaders() {
 	}
 }
 
+function setupBuffers() {
+	const vertexBuffer = gl.createBuffer();
+	if(!vertexBuffer) {
+		console.log('failed to create vertex buffer');
+		return -1;
+	}
+	gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+	gl.enableVertexAttribArray(a_Position);
+	gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, 0, 0);
+}
+
 function clearCanvas() {
 	gl.clearColor(0.0, 0.0, 0.0, 1.0);
 	gl.clear(gl.COLOR_BUFFER_BIT);
@@ -90,11 +102,14 @@ function click(ev) {
 	x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
 	y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
 	
-	const point = new Point({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0})
+	const point = new Point({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0});
 	const tri = new Triangle({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0});
+	const circ = new Circle({x, y, size: 16, steps: Math.floor(Math.random() * 9 + 3), r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: 0.0});
+	// const circ = new Circle({x, y, size: 16, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: 0.0});
 
 	// points.push(point);
-	points.push((Math.random() < 0.5) ? point : tri);
+	// points.push((Math.random() < 0.5) ? point : tri);
+	points.push(circ);
 	
 	renderAll();
 }

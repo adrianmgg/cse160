@@ -108,8 +108,9 @@ function click(ev) {
 	// const circ = new Circle({x, y, size: 16, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: 0.0});
 
 	// points.push(point);
-	points.push((Math.random() < 0.5) ? point : circ);
+	// points.push((Math.random() < 0.5) ? point : circ);
 	// points.push(circ);
+	points.push(new Circle({x, y, size: 16, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: Math.atan2(y, x) + Math.PI / 2}));
 	
 	renderAll();
 }

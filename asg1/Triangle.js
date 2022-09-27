@@ -1,20 +1,11 @@
 
-class Triangle {
+class Triangle extends Circle {
 	constructor({x, y, size, r, g, b, a}) {
-		this.buf = new Float32Array([
-			x, y + 0.5 * size / 200,
-			x + size * -.5  / 200, y + size * -.5  / 200,
-			x + size * .5  / 200, y + size * -0.5  / 200,
-		]);
-		this.color = new Float32Array([r, g, b, a]);
-	}
-	
-	render() {
-		gl.uniform4fv(u_FragColor, this.color);
-		drawTriangle(this.buf);
+		super({x, y, size, r, g, b, a, steps: 3});
 	}
 }
 
+// (this now unused, since i just handle triangles as a 3 point circle)
 function drawTriangle(vertices) {
 	// if it's already a float32array there's no point making another one
 	const vertsBuf = (vertices instanceof Float32Array) ? vertices : new Float32Array(vertices);

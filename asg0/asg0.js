@@ -74,6 +74,9 @@ const operations = {
 		v3.normalize();
 		drawVector(v3, '#0F0');
 	}],
+	angle_between: ['Angle Between', (ctx, v1, v2) => {
+		console.log(`Angle: ${angleBetween(v1, v2) * (180 / Math.PI)}`);
+	}],
 };
 
 for(const op_id in operations) {
@@ -102,4 +105,8 @@ function drawVector(v, color) {
 	ctx.strokeStyle = color;
 	ctx.lineTo(200 + v.elements[0] * 20, 200 + v.elements[1] * -20);
 	ctx.stroke();
+}
+
+function angleBetween(v1, v2) {
+	return Math.acos(Vector3.dot(v1, v2) / (v1.magnitude() * v2.magnitude()));
 }

@@ -77,6 +77,9 @@ const operations = {
 	angle_between: ['Angle Between', (ctx, v1, v2) => {
 		console.log(`Angle: ${angleBetween(v1, v2) * (180 / Math.PI)}`);
 	}],
+	triangle_area: ['Area', (ctx, v1, v2) => {
+		console.log(`Area of the triangle: ${areaTriangle(v1, v2)}`);
+	}],
 };
 
 for(const op_id in operations) {
@@ -109,4 +112,8 @@ function drawVector(v, color) {
 
 function angleBetween(v1, v2) {
 	return Math.acos(Vector3.dot(v1, v2) / (v1.magnitude() * v2.magnitude()));
+}
+
+function areaTriangle(v1, v2) {
+	return Vector3.cross(v1, v2).magnitude() / 2;
 }

@@ -17,21 +17,6 @@ void main() {
 }
 `;
 
-class Point {
-	constructor({x, y, size, r, g, b, a}) {
-		this.pos = new Float32Array([x, y, 0.0]);
-		this.size = size;
-		this.color = new Float32Array([r, g, b, a]);
-	}
-	
-	render() {
-		gl.vertexAttrib3fv(a_Position, this.pos);
-		gl.vertexAttrib1f(a_PointSize, this.size);
-		gl.uniform4fv(u_FragColor, this.color);
-		gl.drawArrays(gl.POINTS, 0, 1);
-	}
-}
-
 let canvas, gl, a_Position, u_FragColor, a_PointSize;
 let points = [];
 
@@ -39,7 +24,7 @@ function main() {
 	setupWebGL();
 	setupShaders();
 	canvas.addEventListener('mousedown', click);
-	render();
+	renderAll();
 }
 
 function setupWebGL() {
@@ -52,6 +37,8 @@ function setupWebGL() {
 		console.log('Failed to get the rendering context for WebGL');
 		return;
 	}
+	
+	clearCanvas();
 }
 
 function setupShaders() {
@@ -82,12 +69,13 @@ function setupShaders() {
 	}
 }
 
-function render() {
-	// Specify the color for clearing <canvas>
+function clearCanvas() {
 	gl.clearColor(0.0, 0.0, 0.0, 1.0);
-
-	// Clear <canvas>
 	gl.clear(gl.COLOR_BUFFER_BIT);
+}
+
+function renderAll() {
+	clearCanvas();
 
 	for(const point of points) {
 		point.render();
@@ -101,8 +89,12 @@ function click(ev) {
 
 	x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
 	y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
+	
+	const point = new Point({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0})
+	const tri = new Triangle({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0});
 
-	points.push(new Point({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0}));
-
-	render();
+	// points.push(point);
+	points.push((Math.random() < 0.5) ? point : tri);
+	
+	renderAll();
 }

@@ -13,11 +13,21 @@ function main() {
 	var ctx = canvas.getContext('2d');
 	// TODO - jank lazy version for now, need to figure out how they actually want us to structure this
 	window.ctx = ctx;
+	
+	handleDrawEvent();
+}
 
-	// Draw a blue rectangle <- (3)
+const v1_x_input = document.getElementById('v1.x');
+const v1_y_input = document.getElementById('v1.y');
+const draw_button = document.getElementById('draw_button');
+draw_button.addEventListener('click', (e) => { handleDrawEvent(); });
+
+function handleDrawEvent() {
+	// clear the canvas
+	// (could also use clearRect, but that gives #0000 not and we want #000F so it'd take another fill for that anyways)
 	ctx.fillStyle = '#000';
 	ctx.fillRect(0, 0, 400, 400);
-	const v1 = new Vector3([2.25, 2.25, 0]);
+	const v1 = new Vector3([v1_x_input.valueAsNumber, v1_y_input.valueAsNumber, 0]);
 	drawVector(v1, "red");
 }
 

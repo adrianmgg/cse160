@@ -26,6 +26,50 @@ const operation_dropdown = document.getElementById('operation_dropdown');
 const operation_scalar = document.getElementById('operation_scalar');
 draw_button.addEventListener('click', (e) => { handleDrawEvent(); });
 
+const operations = {
+	add: ['Add', (ctx, v1, v2) => {
+		const v3 = new Vector3();
+		v3.set(v1);
+		v3.sub(v2);
+		drawVector(v3, '#0F0');
+	}],
+	sub: ['Subtract', (ctx, v1, v2) => {
+		const v3 = new Vector3();
+		v3.set(v1);
+		v3.sub(v2);
+		drawVector(v3, '#0F0');
+	}],
+	mul: ['Multiply', (ctx, v1, v2) => {
+		const scalar = operation_scalar.valueAsNumber;
+		const v3 = new Vector3();
+		const v4 = new Vector3();
+		v3.set(v1);
+		v4.set(v2);
+		v3.mul(scalar);
+		v4.mul(scalar);
+		drawVector(v3, '#0F0');
+		drawVector(v4, '#0F0');
+	}],
+	div: ['Divide', (ctx, v1, v2) => {
+		const scalar = operation_scalar.valueAsNumber;
+		const v3 = new Vector3();
+		const v4 = new Vector3();
+		v3.set(v1);
+		v4.set(v2);
+		v3.div(scalar);
+		v4.div(scalar);
+		drawVector(v3, '#0F0');
+		drawVector(v4, '#0F0');
+	}],
+};
+
+for(const op_id in operations) {
+	const optionElem = document.createElement('option');
+	optionElem.value = op_id;
+	optionElem.textContent = operations[op_id][0];
+	operation_dropdown.appendChild(optionElem);
+}
+
 function handleDrawEvent() {
 	// clear the canvas
 	// (could also use clearRect, but that gives #0000 not and we want #000F so it'd take another fill for that anyways)
@@ -36,22 +80,7 @@ function handleDrawEvent() {
 	const v2 = new Vector3([v2_x_input.valueAsNumber, v2_y_input.valueAsNumber, 0]);
 	drawVector(v2, '#00F');
 	const selected_op = operation_dropdown.options[operation_dropdown.selectedIndex].value;
-	if(selected_op === 'add' || selected_op === 'sub') {
-		const v3 = new Vector3();
-		v3.set(v1);
-		v3[selected_op](v2);
-		drawVector(v3, '#0F0');
-	} else if(selected_op === 'mul' || selected_op === 'div') {
-		const scalar = operation_scalar.valueAsNumber;
-		const v3 = new Vector3();
-		const v4 = new Vector3();
-		v3.set(v1);
-		v4.set(v2);
-		v3[selected_op](scalar);
-		v4[selected_op](scalar);
-		drawVector(v3, '#0F0');
-		drawVector(v4, '#0F0');
-	}
+	operations[selected_op][1](ctx, v1, v2);
 }
 
 function drawVector(v, color) {

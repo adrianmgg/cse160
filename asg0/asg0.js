@@ -22,6 +22,8 @@ const v1_y_input = document.getElementById('v1.y');
 const v2_x_input = document.getElementById('v2.x');
 const v2_y_input = document.getElementById('v2.y');
 const draw_button = document.getElementById('draw_button');
+const operation_dropdown = document.getElementById('operation_dropdown');
+const operation_scalar = document.getElementById('operation_scalar');
 draw_button.addEventListener('click', (e) => { handleDrawEvent(); });
 
 function handleDrawEvent() {
@@ -33,6 +35,23 @@ function handleDrawEvent() {
 	drawVector(v1, "red");
 	const v2 = new Vector3([v2_x_input.valueAsNumber, v2_y_input.valueAsNumber, 0]);
 	drawVector(v2, '#00F');
+	const selected_op = operation_dropdown.options[operation_dropdown.selectedIndex].value;
+	if(selected_op === 'add' || selected_op === 'sub') {
+		const v3 = new Vector3();
+		v3.set(v1);
+		v3[selected_op](v2);
+		drawVector(v3, '#0F0');
+	} else if(selected_op === 'mul' || selected_op === 'div') {
+		const scalar = operation_scalar.valueAsNumber;
+		const v3 = new Vector3();
+		const v4 = new Vector3();
+		v3.set(v1);
+		v4.set(v2);
+		v3[selected_op](scalar);
+		v4[selected_op](scalar);
+		drawVector(v3, '#0F0');
+		drawVector(v4, '#0F0');
+	}
 }
 
 function drawVector(v, color) {

@@ -1,3 +1,5 @@
+const PRESERVE_BUFFER = true;
+
 // Vertex shader program
 var VSHADER_SOURCE =`
 attribute vec4 a_Position;
@@ -33,7 +35,8 @@ function setupWebGL() {
 	canvas = document.getElementById('canvas');
 
 	// Get the rendering context for WebGL
-	gl = getWebGLContext(canvas);
+	// gl = getWebGLContext(canvas);
+	gl = WebGLUtils.setupWebGL(canvas, {preserveDrawingBuffer: PRESERVE_BUFFER});
 	if (!gl) {
 		console.log('Failed to get the rendering context for WebGL');
 		return;
@@ -94,6 +97,15 @@ function renderAll() {
 	}
 }
 
+function pushPoint(point) {
+	if(PRESERVE_BUFFER) {
+		point.render();
+	} else {
+		points.push(point);
+		renderAll();
+	}
+}
+
 function click(ev) {
 	var x = ev.clientX; // x coordinate of a mouse pointer
 	var y = ev.clientY; // y coordinate of a mouse pointer
@@ -102,15 +114,13 @@ function click(ev) {
 	x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
 	y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
 	
-	const point = new Point({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0});
-	const tri = new Triangle({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0});
-	const circ = new Circle({x, y, size: 16, steps: Math.floor(Math.random() * 9 + 3), r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: 0.0});
+	// const point = new Point({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0});
+	// const tri = new Triangle({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0});
+	// const circ = new Circle({x, y, size: 16, steps: Math.floor(Math.random() * 9 + 3), r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: 0.0});
 	// const circ = new Circle({x, y, size: 16, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: 0.0});
 
 	// points.push(point);
 	// points.push((Math.random() < 0.5) ? point : circ);
 	// points.push(circ);
-	points.push(new Circle({x, y, size: 16, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: Math.atan2(y, x) + Math.PI / 2}));
-	
-	renderAll();
+	pushPoint(new Circle({x, y, size: 32, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: Math.atan2(y, x) + Math.PI / 2}));
 }

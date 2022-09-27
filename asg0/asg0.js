@@ -61,6 +61,19 @@ const operations = {
 		drawVector(v3, '#0F0');
 		drawVector(v4, '#0F0');
 	}],
+	magnitude: ['Magnitude', (ctx, v1, v2) => {
+		console.log(`Magnitude v1: ${v1.magnitude()}`);
+		console.log(`Magnitude v2: ${v2.magnitude()}`);
+	}],
+	normalize: ['Normalize', (ctx, v1, v2) => {
+		const v3 = new Vector3();
+		v3.set(v1);
+		v3.normalize();
+		drawVector(v3, '#0F0');
+		v3.set(v2);
+		v3.normalize();
+		drawVector(v3, '#0F0');
+	}],
 };
 
 for(const op_id in operations) {

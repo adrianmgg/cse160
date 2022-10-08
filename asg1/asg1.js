@@ -1,4 +1,4 @@
-const PRESERVE_BUFFER = true;
+const PRESERVE_BUFFER = false;
 
 // Vertex shader program
 var VSHADER_SOURCE =`
@@ -26,6 +26,7 @@ function main() {
 	setupWebGL();
 	setupShaders();
 	setupBuffers();
+	initUI();
 	canvas.addEventListener('mousedown', click);
 	renderAll();
 }
@@ -111,6 +112,15 @@ function pushPoint(point) {
 	}
 }
 
+function popPoint() {
+	if(PRESERVE_BUFFER) {
+		throw 'unsupported';
+	} else {
+		points.pop();
+		renderAll();
+	}
+}
+
 function click(ev) {
 	var x = ev.clientX; // x coordinate of a mouse pointer
 	var y = ev.clientY; // y coordinate of a mouse pointer
@@ -118,6 +128,19 @@ function click(ev) {
 
 	x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
 	y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
+
+	if(paintProgramOptions.mode === 'stamp') {
+		if(paintProgramOptions.stampOptions.mode === 'ngon') {
+			pushPoint(new Circle({
+				x,
+				y,
+				size: paintProgramOptions.stampOptions.size,
+				steps: paintProgramOptions.stampOptions.sides,
+				color: [...paintProgramOptions.stampOptions.color, paintProgramOptions.stampOptions.alpha],
+				angle: paintProgramOptions.stampOptions.angle,
+			}));
+		}
+	}
 	
 	// const point = new Point({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0});
 	// const tri = new Triangle({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0});
@@ -127,5 +150,6 @@ function click(ev) {
 	// points.push(point);
 	// points.push((Math.random() < 0.5) ? point : circ);
 	// points.push(circ);
-	pushPoint(new Circle({x, y, size: 32, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: Math.atan2(y, x) + Math.PI / 2}));
+	// pushPoint(new Circle({x, y, size: 32, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: Math.atan2(y, x) + Math.PI / 2}));
+	// pushPoint(new Circle({x, y, size: 32, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: Math.atan2(y, x) + Math.PI / 2}));
 }

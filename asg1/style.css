@@ -1,0 +1,10 @@
+
+#stamp_options, #brush_options {
+    display: none;
+}
+
+   ui_container[data-mode="stamp"] > #stamp_options
+ , ui_container[data-mode="brush"] > #brush_options
+{
+    display: unset;
+}

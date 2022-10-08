@@ -14,12 +14,12 @@ class VecBufThing {
 }
 
 class Circle extends VecBufThing {
-	constructor({x, y, size, steps, r, g, b, a, angle}) {
+	constructor({x, y, size, steps, color, angle}) {
 		angle += Math.PI / 2; // have angle 0 point polys corner up
 
 		// special case for 3 steps, since we can just use a single triangle for that
 		if(steps === 3) {
-			super(6, gl.TRIANGLES, [r, g, b, a]);
+			super(6, gl.TRIANGLES, color);
 			this.buf = new Float32Array(6);
 			let theta0 = 0 / steps * Math.PI * 2 + angle;
 			let theta1 = 1 / steps * Math.PI * 2 + angle;
@@ -32,7 +32,7 @@ class Circle extends VecBufThing {
 			this.buf[5] = y + Math.sin(theta2) * size / canvas.height;
 		}
 		else {
-			super((3 * 2) + ((steps - 1) * 1 * 2), gl.TRIANGLE_FAN, [r, g, b, a]);
+			super((3 * 2) + ((steps - 1) * 1 * 2), gl.TRIANGLE_FAN, color);
 			for(let i = 0; i < steps; i++) {
 				let theta0 = i / steps * Math.PI * 2 + angle;
 				let theta1 = (i+1) / steps * Math.PI * 2 + angle;

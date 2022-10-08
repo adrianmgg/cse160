@@ -169,10 +169,10 @@ function onCanvasMouseDown(ev) {
  * @param {MouseEvent} ev
  */
 function onCanvasMouseMove(ev) {
+	const [x, y] = mouseevent2canvascoords(ev);
 	if(paintProgramOptions.mode === 'stamp') {
 		if(ev.buttons === 0) {
 			renderAll();
-			const [x, y] = mouseevent2canvascoords(ev);
 			new Circle({
 				x,
 				y,

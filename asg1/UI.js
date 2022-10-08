@@ -88,7 +88,7 @@ function initUI() {
 		['option__mode', ['mode'], el => el.options[el.selectedIndex].value],
 		['option__stamp__sides', ['stampOptions', 'sides'], el => el.valueAsNumber],
 		['option__stamp__size', ['stampOptions', 'size'], el => el.valueAsNumber],
-		['option__stamp__angle', ['stampOptions', 'angle'], el => el.valueAsNumber],
+		['option__stamp__angle', ['stampOptions', 'angle'], el => el.valueAsNumber / 180 * Math.PI],
 		['option__stamp__color', ['stampOptions', 'color'], el => parseColor(el.value)]
 	]) {
 		const elem = document.getElementById(id);

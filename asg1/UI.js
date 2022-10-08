@@ -82,14 +82,8 @@ function parseColor(s) {
 }
 
 function initUI() {
-	setup(document.getElementById('button__undo'), {
-		events: {
-			click: e => {
-				popPoint();
-			},
-		},
-	});
-
+	document.getElementById('button__undo').addEventListener('click', () => { popPoint(); });
+	document.getElementById('button__clear').addEventListener('click', () => { clearPoints(); });
 	for(const [id, path, getval] of [
 		['option__mode', ['mode'], el => el.options[el.selectedIndex].value],
 		['option__stamp__sides', ['stampOptions', 'sides'], el => el.valueAsNumber],

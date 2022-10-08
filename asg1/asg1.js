@@ -27,7 +27,9 @@ function main() {
 	setupShaders();
 	setupBuffers();
 	initUI();
-	canvas.addEventListener('mousedown', click);
+	canvas.addEventListener('mousedown', onCanvasMouseDown);
+	canvas.addEventListener('mousemove', onCanvasMouseMove);
+	canvas.addEventListener('mouseout', onCanvasMouseOut);
 	renderAll();
 }
 
@@ -90,10 +92,10 @@ function clearCanvas() {
 	gl.clear(gl.COLOR_BUFFER_BIT);
 }
 
-function clearAll() {
-	clearCanvas();
-	points = [];
-}
+// function clearAll() {
+// 	clearCanvas();
+// 	points = [];
+// }
 
 function renderAll() {
 	clearCanvas();
@@ -104,12 +106,8 @@ function renderAll() {
 }
 
 function pushPoint(point) {
-	if(PRESERVE_BUFFER) {
-		point.render();
-	} else {
-		points.push(point);
-		renderAll();
-	}
+	points.push(point);
+	renderAll();
 }
 
 function popPoint() {
@@ -121,13 +119,26 @@ function popPoint() {
 	}
 }
 
-function click(ev) {
-	var x = ev.clientX; // x coordinate of a mouse pointer
-	var y = ev.clientY; // y coordinate of a mouse pointer
-	var rect = ev.target.getBoundingClientRect();
+function clearPoints() {
+	points.length = 0; // clear points array in-place
+	renderAll();
+}
 
+/**
+ * @param {MouseEvent} ev
+ * @returns {[number, number]}
+ */
+function mouseevent2canvascoords(ev) {
+	let x = ev.clientX;
+	let y = ev.clientY;
+	let rect = ev.target.getBoundingClientRect();
 	x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
 	y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
+	return [x, y];
+}
+
+function onCanvasMouseDown(ev) {
+	const [x, y] = mouseevent2canvascoords(ev);
 
 	if(paintProgramOptions.mode === 'stamp') {
 		if(paintProgramOptions.stampOptions.mode === 'ngon') {
@@ -153,3 +164,41 @@ function click(ev) {
 	// pushPoint(new Circle({x, y, size: 32, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: Math.atan2(y, x) + Math.PI / 2}));
 	// pushPoint(new Circle({x, y, size: 32, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: Math.atan2(y, x) + Math.PI / 2}));
 }
+
+/**
+ * @param {MouseEvent} ev
+ */
+function onCanvasMouseMove(ev) {
+	if(paintProgramOptions.mode === 'stamp') {
+		if(ev.buttons === 0) {
+			renderAll();
+			const [x, y] = mouseevent2canvascoords(ev);
+			new Circle({
+				x,
+				y,
+				size: paintProgramOptions.stampOptions.size,
+				steps: paintProgramOptions.stampOptions.sides,
+				color: [...paintProgramOptions.stampOptions.color, paintProgramOptions.stampOptions.alpha],
+				angle: paintProgramOptions.stampOptions.angle,
+			}).render();
+		} else if(ev.buttons === 1) {
+			// const [x, y] = mouseevent2canvascoords(ev);
+			// pushPoint(new Circle({
+			// 	x,
+			// 	y,
+			// 	size: paintProgramOptions.stampOptions.size,
+			// 	steps: paintProgramOptions.stampOptions.sides,
+			// 	color: [...paintProgramOptions.stampOptions.color, paintProgramOptions.stampOptions.alpha],
+			// 	angle: paintProgramOptions.stampOptions.angle,
+			// }));
+			// renderAll();
+		}
+	}
+}
+
+function onCanvasMouseOut(ev) {
+	if(paintProgramOptions.mode === 'stamp') {
+		renderAll();
+	}
+}
+

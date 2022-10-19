@@ -5,10 +5,11 @@ const PRESERVE_BUFFER = false;
 
 // Vertex shader program
 var VSHADER_SOURCE =`
-attribute vec4 a_Position;
+uniform mat4 u_ModelMat;
+attribute vec3 a_Position;
 void main() {
-	gl_Position = a_Position;
-	gl_PointSize = 32.0;
+	gl_Position = u_ModelMat * vec4(a_Position, 1.0);
+	gl_PointSize = 8.0;
 }
 `;
 
@@ -24,7 +25,7 @@ void main() {
 /** @type {WebGLRenderingContext} */
 let gl;
 
-let canvas, a_Position, u_FragColor;
+let canvas, a_Position, u_FragColor, u_ModelMat;
 
 function main() {
 	setupWebGL();
@@ -80,6 +81,12 @@ function setupShaders() {
 		console.log('Failed to get the storage location of u_FragColor');
 		return;
 	}
+
+	u_ModelMat = gl.getUniformLocation(gl.program, 'u_ModelMat');
+	if (!u_ModelMat) {
+		console.log('Failed to get the storage location of u_ModelMat');
+		return;
+	}
 }
 
 function setupBuffers() {
@@ -90,7 +97,7 @@ function setupBuffers() {
 	}
 	gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
 	gl.enableVertexAttribArray(a_Position);
-	gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, 0, 0);
+	gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
 }
 
 function clearCanvas() {
@@ -99,14 +106,29 @@ function clearCanvas() {
 	gl.clear(gl.COLOR_BUFFER_BIT);
 }
 
+
+
+const armature = new Bone(Mat4x4.identity());
+
+/** @type {number | DOMHighResTimeStamp} */
+let prevTickTime = 0;
 // TODO: haven't actually read their instructions on how to write a tick func yet, should probably do that
 /**
  * @param {DOMHighResTimeStamp} curTime
  */
 function tick(curTime) {
-	const b = new Bone(Mat4x4.identity());
+	clearCanvas();
+
+	const delta = curTime - prevTickTime;
+
+	// armature.mat = armature.mat.translate(delta / 1000 / 10, 0, 0);
+	armature.mat = armature.mat.rotateY(delta / 1000);
+
 	gl.uniform4f(u_FragColor, 1, 0, 0, 1);
-	b.render(gl, Mat4x4.identity());
+	armature.render(gl, Mat4x4.identity());
+
+	// ==== DON'T INSERT ANYTHING ELSE IN tick() AFTER THIS LINE! ====
+	prevTickTime = curTime;
 	requestAnimationFrame(tick);
 }
 

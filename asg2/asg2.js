@@ -1,12 +1,14 @@
+// @ts-check
+'use strict';
+
 const PRESERVE_BUFFER = false;
 
 // Vertex shader program
 var VSHADER_SOURCE =`
 attribute vec4 a_Position;
-attribute float a_PointSize;
 void main() {
 	gl_Position = a_Position;
-	gl_PointSize = a_PointSize;
+	gl_PointSize = 32.0;
 }
 `;
 
@@ -22,19 +24,19 @@ void main() {
 /** @type {WebGLRenderingContext} */
 let gl;
 
-let canvas, a_Position, u_FragColor, a_PointSize;
-let points = [];
+let canvas, a_Position, u_FragColor;
 
 function main() {
 	setupWebGL();
 	setupShaders();
 	setupBuffers();
-	initUI();
-	canvas.addEventListener('mousedown', onCanvasMouseDown);
-	canvas.addEventListener('mousemove', onCanvasMouseMove);
-	canvas.addEventListener('mouseout', onCanvasMouseOut);
-	canvas.addEventListener('mouseup', onCanvasMouseUp);
-	renderAll();
+	// initUI();
+	// canvas.addEventListener('mousedown', onCanvasMouseDown);
+	// canvas.addEventListener('mousemove', onCanvasMouseMove);
+	// canvas.addEventListener('mouseout', onCanvasMouseOut);
+	// canvas.addEventListener('mouseup', onCanvasMouseUp);
+	// renderAll();
+	requestAnimationFrame(tick);
 }
 
 function setupWebGL() {
@@ -66,11 +68,11 @@ function setupShaders() {
 		return;
 	}
 	
-	a_PointSize = gl.getAttribLocation(gl.program, 'a_PointSize');
-	if(a_PointSize < 0) {
-		console.log('Failed to get the storage location of a_PointSize');
-		return;
-	}
+	// a_PointSize = gl.getAttribLocation(gl.program, 'a_PointSize');
+	// if(a_PointSize < 0) {
+	// 	console.log('Failed to get the storage location of a_PointSize');
+	// 	return;
+	// }
 
 	// Get the storage location of u_FragColor
 	u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor');
@@ -92,8 +94,20 @@ function setupBuffers() {
 }
 
 function clearCanvas() {
-	gl.clearColor(0.0, 0.0, 0.0, 1.0);
+	// gl.clearColor(0.0, 0.0, 0.0, 1.0);
+	gl.clearColor(.8, .8, .8, 1.0);
 	gl.clear(gl.COLOR_BUFFER_BIT);
+}
+
+// TODO: haven't actually read their instructions on how to write a tick func yet, should probably do that
+/**
+ * @param {DOMHighResTimeStamp} curTime
+ */
+function tick(curTime) {
+	const b = new Bone(Mat4x4.identity());
+	gl.uniform4f(u_FragColor, 1, 0, 0, 1);
+	b.render(gl, Mat4x4.identity());
+	requestAnimationFrame(tick);
 }
 
 // function clearAll() {
@@ -101,32 +115,32 @@ function clearCanvas() {
 // 	points = [];
 // }
 
-function renderAll() {
-	clearCanvas();
+// function renderAll() {
+// 	clearCanvas();
 
-	for(const point of points) {
-		point.render();
-	}
-}
+// 	for(const point of points) {
+// 		point.render();
+// 	}
+// }
 
-function pushPoint(point) {
-	points.push(point);
-	renderAll();
-}
+// function pushPoint(point) {
+// 	points.push(point);
+// 	renderAll();
+// }
 
-function popPoint() {
-	if(PRESERVE_BUFFER) {
-		throw 'unsupported';
-	} else {
-		points.pop();
-		renderAll();
-	}
-}
+// function popPoint() {
+// 	if(PRESERVE_BUFFER) {
+// 		throw 'unsupported';
+// 	} else {
+// 		points.pop();
+// 		renderAll();
+// 	}
+// }
 
-function clearPoints() {
-	points.length = 0; // clear points array in-place
-	renderAll();
-}
+// function clearPoints() {
+// 	points.length = 0; // clear points array in-place
+// 	renderAll();
+// }
 
 /**
  * @param {MouseEvent} ev
@@ -141,90 +155,90 @@ function mouseevent2canvascoords(ev) {
 	return [x, y];
 }
 
-let curStroke = null;
+// let curStroke = null;
 
-function onCanvasMouseDown(ev) {
-	const [x, y] = mouseevent2canvascoords(ev);
+// function onCanvasMouseDown(ev) {
+// 	const [x, y] = mouseevent2canvascoords(ev);
 
-	if(paintProgramOptions.mode === 'stamp') {
-		lastDrawPoint = [x, y];
-		if(paintProgramOptions.stampOptions.mode === 'ngon') {
-			pushPoint(new Circle({
-				x,
-				y,
-				size: paintProgramOptions.stampOptions.size,
-				steps: paintProgramOptions.stampOptions.sides,
-				color: [...paintProgramOptions.stampOptions.color, paintProgramOptions.stampOptions.alpha],
-				angle: paintProgramOptions.stampOptions.angle,
-			}));
-		}
-	} else if(paintProgramOptions.mode === 'brush') {
-		// // TODO if curstroke not null
-		// curStroke = new BrushStroke();
-		// pushPoint(curStroke);
-	}
-}
+// 	if(paintProgramOptions.mode === 'stamp') {
+// 		lastDrawPoint = [x, y];
+// 		if(paintProgramOptions.stampOptions.mode === 'ngon') {
+// 			pushPoint(new Circle({
+// 				x,
+// 				y,
+// 				size: paintProgramOptions.stampOptions.size,
+// 				steps: paintProgramOptions.stampOptions.sides,
+// 				color: [...paintProgramOptions.stampOptions.color, paintProgramOptions.stampOptions.alpha],
+// 				angle: paintProgramOptions.stampOptions.angle,
+// 			}));
+// 		}
+// 	} else if(paintProgramOptions.mode === 'brush') {
+// 		// // TODO if curstroke not null
+// 		// curStroke = new BrushStroke();
+// 		// pushPoint(curStroke);
+// 	}
+// }
 
-/** @type {[number, number] | null} */
-let lastDrawPoint = null;
+// /** @type {[number, number] | null} */
+// let lastDrawPoint = null;
 
-/**
- * @param {MouseEvent} ev
- */
-function onCanvasMouseMove(ev) {
-	const [x, y] = mouseevent2canvascoords(ev);
-	if(paintProgramOptions.mode === 'stamp') {
-		if(ev.buttons === 0) {
-			renderAll();
-			new Circle({
-				x,
-				y,
-				size: paintProgramOptions.stampOptions.size,
-				steps: paintProgramOptions.stampOptions.sides,
-				color: [...paintProgramOptions.stampOptions.color, paintProgramOptions.stampOptions.alpha],
-				angle: paintProgramOptions.stampOptions.angle,
-			}).render();
-		} else if(ev.buttons === 1) {
-			if(lastDrawPoint === null) {
-				lastDrawPoint = [x, y];
-			} else {
-				const dist = Math.sqrt(Math.pow(x - lastDrawPoint[0], 2) + Math.pow(y - lastDrawPoint[1], 2));
-				if(dist >= 1e-1) {
-					lastDrawPoint = [x, y];
-					pushPoint(new Circle({
-						x,
-						y,
-						size: paintProgramOptions.stampOptions.size,
-						steps: paintProgramOptions.stampOptions.sides,
-						color: [...paintProgramOptions.stampOptions.color, paintProgramOptions.stampOptions.alpha],
-						angle: paintProgramOptions.stampOptions.angle,
-					}));
-					renderAll();
-				}
-			}
-		}
-	} else if(paintProgramOptions.mode === 'brush') {
-		// if(curStroke !== null && ev.buttons === 1) {
-		// 	curStroke.points.push([x, y]);
-		// 	renderAll();
-		// }
-	}
-}
+// /**
+//  * @param {MouseEvent} ev
+//  */
+// function onCanvasMouseMove(ev) {
+// 	const [x, y] = mouseevent2canvascoords(ev);
+// 	if(paintProgramOptions.mode === 'stamp') {
+// 		if(ev.buttons === 0) {
+// 			renderAll();
+// 			new Circle({
+// 				x,
+// 				y,
+// 				size: paintProgramOptions.stampOptions.size,
+// 				steps: paintProgramOptions.stampOptions.sides,
+// 				color: [...paintProgramOptions.stampOptions.color, paintProgramOptions.stampOptions.alpha],
+// 				angle: paintProgramOptions.stampOptions.angle,
+// 			}).render();
+// 		} else if(ev.buttons === 1) {
+// 			if(lastDrawPoint === null) {
+// 				lastDrawPoint = [x, y];
+// 			} else {
+// 				const dist = Math.sqrt(Math.pow(x - lastDrawPoint[0], 2) + Math.pow(y - lastDrawPoint[1], 2));
+// 				if(dist >= 1e-1) {
+// 					lastDrawPoint = [x, y];
+// 					pushPoint(new Circle({
+// 						x,
+// 						y,
+// 						size: paintProgramOptions.stampOptions.size,
+// 						steps: paintProgramOptions.stampOptions.sides,
+// 						color: [...paintProgramOptions.stampOptions.color, paintProgramOptions.stampOptions.alpha],
+// 						angle: paintProgramOptions.stampOptions.angle,
+// 					}));
+// 					renderAll();
+// 				}
+// 			}
+// 		}
+// 	} else if(paintProgramOptions.mode === 'brush') {
+// 		// if(curStroke !== null && ev.buttons === 1) {
+// 		// 	curStroke.points.push([x, y]);
+// 		// 	renderAll();
+// 		// }
+// 	}
+// }
 
-/**
- * @param {MouseEvent} ev
- */
-function onCanvasMouseOut(ev) {
-	if(paintProgramOptions.mode === 'stamp') {
-		renderAll();
-		lastDrawPoint = null;
-	}
-}
+// /**
+//  * @param {MouseEvent} ev
+//  */
+// function onCanvasMouseOut(ev) {
+// 	if(paintProgramOptions.mode === 'stamp') {
+// 		renderAll();
+// 		lastDrawPoint = null;
+// 	}
+// }
 
-/**
- * @param {MouseEvent} ev
- */
-function onCanvasMouseUp(ev) {
-	lastDrawPoint = null;
-}
+// /**
+//  * @param {MouseEvent} ev
+//  */
+// function onCanvasMouseUp(ev) {
+// 	lastDrawPoint = null;
+// }
 

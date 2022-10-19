@@ -19,7 +19,10 @@ void main() {
 }
 `;
 
-let canvas, gl, a_Position, u_FragColor, a_PointSize;
+/** @type {WebGLRenderingContext} */
+let gl;
+
+let canvas, a_Position, u_FragColor, a_PointSize;
 let points = [];
 
 function main() {
@@ -30,6 +33,7 @@ function main() {
 	canvas.addEventListener('mousedown', onCanvasMouseDown);
 	canvas.addEventListener('mousemove', onCanvasMouseMove);
 	canvas.addEventListener('mouseout', onCanvasMouseOut);
+	canvas.addEventListener('mouseup', onCanvasMouseUp);
 	renderAll();
 }
 
@@ -137,10 +141,13 @@ function mouseevent2canvascoords(ev) {
 	return [x, y];
 }
 
+let curStroke = null;
+
 function onCanvasMouseDown(ev) {
 	const [x, y] = mouseevent2canvascoords(ev);
 
 	if(paintProgramOptions.mode === 'stamp') {
+		lastDrawPoint = [x, y];
 		if(paintProgramOptions.stampOptions.mode === 'ngon') {
 			pushPoint(new Circle({
 				x,
@@ -151,19 +158,15 @@ function onCanvasMouseDown(ev) {
 				angle: paintProgramOptions.stampOptions.angle,
 			}));
 		}
+	} else if(paintProgramOptions.mode === 'brush') {
+		// // TODO if curstroke not null
+		// curStroke = new BrushStroke();
+		// pushPoint(curStroke);
 	}
-	
-	// const point = new Point({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0});
-	// const tri = new Triangle({x, y, size: 16, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0});
-	// const circ = new Circle({x, y, size: 16, steps: Math.floor(Math.random() * 9 + 3), r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: 0.0});
-	// const circ = new Circle({x, y, size: 16, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: 0.0});
-
-	// points.push(point);
-	// points.push((Math.random() < 0.5) ? point : circ);
-	// points.push(circ);
-	// pushPoint(new Circle({x, y, size: 32, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: Math.atan2(y, x) + Math.PI / 2}));
-	// pushPoint(new Circle({x, y, size: 32, steps: 3, r: Math.random()/2+.5, g: Math.random()/2+.5, b: Math.random()/2+.5, a: 1.0, angle: Math.atan2(y, x) + Math.PI / 2}));
 }
+
+/** @type {[number, number] | null} */
+let lastDrawPoint = null;
 
 /**
  * @param {MouseEvent} ev
@@ -182,23 +185,46 @@ function onCanvasMouseMove(ev) {
 				angle: paintProgramOptions.stampOptions.angle,
 			}).render();
 		} else if(ev.buttons === 1) {
-			// const [x, y] = mouseevent2canvascoords(ev);
-			// pushPoint(new Circle({
-			// 	x,
-			// 	y,
-			// 	size: paintProgramOptions.stampOptions.size,
-			// 	steps: paintProgramOptions.stampOptions.sides,
-			// 	color: [...paintProgramOptions.stampOptions.color, paintProgramOptions.stampOptions.alpha],
-			// 	angle: paintProgramOptions.stampOptions.angle,
-			// }));
-			// renderAll();
+			if(lastDrawPoint === null) {
+				lastDrawPoint = [x, y];
+			} else {
+				const dist = Math.sqrt(Math.pow(x - lastDrawPoint[0], 2) + Math.pow(y - lastDrawPoint[1], 2));
+				if(dist >= 1e-1) {
+					lastDrawPoint = [x, y];
+					pushPoint(new Circle({
+						x,
+						y,
+						size: paintProgramOptions.stampOptions.size,
+						steps: paintProgramOptions.stampOptions.sides,
+						color: [...paintProgramOptions.stampOptions.color, paintProgramOptions.stampOptions.alpha],
+						angle: paintProgramOptions.stampOptions.angle,
+					}));
+					renderAll();
+				}
+			}
 		}
+	} else if(paintProgramOptions.mode === 'brush') {
+		// if(curStroke !== null && ev.buttons === 1) {
+		// 	curStroke.points.push([x, y]);
+		// 	renderAll();
+		// }
 	}
 }
 
+/**
+ * @param {MouseEvent} ev
+ */
 function onCanvasMouseOut(ev) {
 	if(paintProgramOptions.mode === 'stamp') {
 		renderAll();
+		lastDrawPoint = null;
 	}
+}
+
+/**
+ * @param {MouseEvent} ev
+ */
+function onCanvasMouseUp(ev) {
+	lastDrawPoint = null;
 }
 

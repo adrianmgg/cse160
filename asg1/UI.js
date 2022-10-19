@@ -1,41 +1,6 @@
 
-function createSlider({min, max, step = undefined, value}) {
-	return create('input', {
-		type: 'range',
-		min,
-		max,
-		step,
-		value,
-	});
-}
-
-/**
- * @param {([string, string][])} options 
- * @param {(string) => undefined} onChange
- * @returns {HTMLSelectElement}
- */
-function createDropdown(options, onChange) {
-	return create('select', {
-		children: options.map(([value, label]) => create('option', {
-			value,
-			textContent: label,
-		})),
-		events: {
-			change: (e) => {
-				onChange(e.target.options[e.target.selectedIndex].value);
-			},
-		}
-	});
-}
-
-function labelify(text, el) {
-	return create('label', {
-		textContent: text,
-		children: [el],
-	});
-}
-
-/** @typedef {'stamp' | 'brush'} PaintMode */
+// (was 'stamp' | 'brush' but i removed brush since i didnt have time to implement it)
+/** @typedef {'stamp'} PaintMode */
 /** @typedef {'ngon'} StampMode */
 /** @typedef {[number, number, number]} Color */
 
@@ -70,14 +35,12 @@ const uiContainer = document.getElementById('ui_container');
 
 function onSettingsChanged() {
 	uiContainer.dataset.mode = paintProgramOptions.mode;
-	console.log(paintProgramOptions);
 }
 
 /**
  * @param {string} s 
  */
 function parseColor(s) {
-	console.log('parseColor', s);
 	return [Number.parseInt(s.slice(1, 1+2), 16) / 255.0, Number.parseInt(s.slice(3, 3+2), 16) / 255.0, Number.parseInt(s.slice(5, 5+2), 16) / 255.0];
 }
 
@@ -99,7 +62,50 @@ function initUI() {
 		});
 		setByPath(paintProgramOptions, path, getval_(elem));
 	}
+	// TODO didn't have a chance to build a proper system for programatically changing the ui-controlled options so this'll have to do for now
+	document.getElementById('button__preset__triangle').addEventListener('click', e => {
+		paintProgramOptions.mode = 'stamp';
+		document.getElementById('option__stamp__sides').value = paintProgramOptions.stampOptions.sides = 3;
+		onSettingsChanged();
+	});
+	document.getElementById('button__preset__circle').addEventListener('click', e => {
+		paintProgramOptions.mode = 'stamp';
+		document.getElementById('option__stamp__sides').value = paintProgramOptions.stampOptions.sides = 32;
+		onSettingsChanged();
+	});
+	document.getElementById('button__preset__square').addEventListener('click', e => {
+		paintProgramOptions.mode = 'stamp';
+		document.getElementById('option__stamp__sides').value = paintProgramOptions.stampOptions.sides = 4;
+		document.getElementById('option__stamp__angle').value = paintProgramOptions.stampOptions.angle = Math.PI / 4;
+		onSettingsChanged();
+	});
 	onSettingsChanged();
+
+	document.getElementById('button__loaddrawing').addEventListener('click', e => {
+		const circleR = 1e-1;
+		const dirtC = parseColor('#583d28');
+		const grassC = parseColor('#506b39');
+		const logC = parseColor('#6a5a4c');
+		const leafC = parseColor('#384626');
+		for(const [x, y, c] of [
+			[0, 0, dirtC],
+			[1, 0, dirtC],
+			[2, 0, dirtC],
+			[3, 0, dirtC],
+			[4, 0, dirtC],
+			[5, 0, dirtC],
+		]) {
+			pushPoint(new Circle({
+				x: x * circleR * 1.4,
+				y: y * circleR * 2,
+				size: circleR * 400,
+				steps: 4,
+				color: [...c, 1.0],
+				angle: Math.PI / 4,
+			}));
+		}
+		renderAll();
+	});
 	// const option__mode = document.getElementById('option__mode');
 	// option__mode.addEventListener('change', e => {
 

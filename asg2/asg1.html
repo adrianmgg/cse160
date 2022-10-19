@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Assignment 1: Painting</title>
+	</head>
+	
+	<body onload="main()">
+		<canvas id="canvas" width="400" height="400">
+		Please use a browser that supports "canvas"
+		</canvas>
+		<div id="ui_container">
+			<div>
+				<button id="button__undo">Undo</button>
+				<button id="button__clear">Clear</button>
+			</div>
+			<select id="option__mode" style="display:none">
+				<option value="stamp">Stamp</option>
+				<!-- <option value="brush">Brush</option> -->
+			</select>
+			<button id="button__loaddrawing">Load Drawing</button>
+			<div>
+				<button id="button__preset__triangle">Triangle</button>
+				<button id="button__preset__circle">Circle</button>
+				<button id="button__preset__square">Square</button>
+			</div>
+			<div class="stamp_options">
+				<label>sides<input type="number" id="option__stamp__sides" min="3" step="1" value="3"></label>
+				<label>size<input type="range" id="option__stamp__size" min="1" max="100" value="12"></label>
+				<label>angle<input type="range" id="option__stamp__angle" min="0" max="360" value="3"></label>
+				<label>color<input type="color" id="option__stamp__color" value="#ff0000"></label>
+			</div>
+			<div class="brush_options"></div>
+		</div>
+		<link rel="stylesheet" href="style.css">
+		<!-- TODO use modules? -->
+		<script src="lib/webgl-utils.js"></script>
+		<script src="lib/webgl-debug.js"></script>
+		<script src="lib/cuon-utils.js"></script>
+		<script src="Circle.js"></script>
+		<script src="UI.js"></script>
+		<script src="asg1.js"></script>
+	</body>
+</html>

@@ -315,23 +315,29 @@ class Vec {
     /** @param {Vec} a @returns {Vec} */
     cross(a) { return Vec.cross(this, a); }
 
-    /** @private */ static _ZERO = Vec.of(0, 0, 0);
-    /** @returns {Vec} */ static zero() { return Vec._ZERO; }
-    /** @private */ static _ONE = Vec.of(1, 1, 1);
-    /** @returns {Vec} */ static one() { return Vec._ONE; }
-    /** @private */ static _UP = Vec.of(0, 1, 0);
-    /** @returns {Vec} */ static up() { return Vec._UP; }
-    /** @private */ static _DOWN = Vec.of(0, -1, 0);
-    /** @returns {Vec} */ static down() { return Vec._DOWN; }
-    /** @private */ static _RIGHT = Vec.of(1, 0, 0);
-    /** @returns {Vec} */ static right() { return Vec._RIGHT; }
-    /** @private */ static _LEFT = Vec.of(-1, 0, 0);
-    /** @returns {Vec} */ static left() { return Vec._LEFT; }
-    /** @private */ static _BACKWARDS = Vec.of(0, 0, 1);
-    /** @returns {Vec} */ static backwards() { return Vec._BACKWARDS; }
-    /** @private */ static _FORWARDS = Vec.of(0, 0, -1);
-    /** @returns {Vec} */ static forwards() { return Vec._FORWARDS; }
+    /** @returns {[number, number, number]} */
+    xyz() {
+        return [this.x, this.y, this.z];
+    }
 
+    /** @param {Mat4x4} mat @returns {Vec} */
+    transform(mat) {
+        // TODO vecs should probably have a .w?
+        return Vec.of(
+            mat.get(0, 0) * this.x + mat.get(0, 1) * this.y + mat.get(0, 2) * this.z + mat.get(0, 3) * /*this.w*/1,
+            mat.get(1, 0) * this.x + mat.get(1, 1) * this.y + mat.get(1, 2) * this.z + mat.get(1, 3) * /*this.w*/1,
+            mat.get(2, 0) * this.x + mat.get(2, 1) * this.y + mat.get(2, 2) * this.z + mat.get(2, 3) * /*this.w*/1,
+        );
+    }
+
+    static ZERO = Vec.of(0, 0, 0);
+    static ONE = Vec.of(1, 1, 1);
+    static UP = Vec.of(0, 1, 0);
+    static DOWN = Vec.of(0, -1, 0);
+    static RIGHT = Vec.of(1, 0, 0);
+    static LEFT = Vec.of(-1, 0, 0);
+    static BACKWARDS = Vec.of(0, 0, 1);
+    static FORWARDS = Vec.of(0, 0, -1);
 }
 
 
@@ -339,17 +345,25 @@ class Vec {
 class Camera {
     constructor() {
         /** @type {Vec} */
-        this.pos = Vec.zero();
+        this.pos = Vec.ZERO;
         /** @type {Vec} */
-        this.gaze = Vec.forwards();
+        this.gaze = Vec.FORWARDS;
         /** @type {Vec} */
-        this.up = Vec.up();
+        this.up = Vec.UP;
 
         /** @type {number} */
         this.nearPlane = 1e-2;
         /** @type {number} */
         this.farPlane = 1e4;
         this.fov = Math.PI / 2;
+    }
+
+    /**
+     * point {@link Camera.gaze} towards the specified point
+     * @param {Vec} v 
+     */
+    gazeTowards(v) {
+        this.gaze = v.sub(this.pos);
     }
 
     /** @private @returns {Mat4x4} */
@@ -417,6 +431,10 @@ class Bone {
     constructor(mat) {
         /** @type {Mat4x4} */
         this.mat = mat;
+        /** @type {number} */
+        this.length = 1.0;
+        /** @type {Renderable[]} */
+        this.children = [];
     }
 
     /**
@@ -426,46 +444,79 @@ class Bone {
     render(gl, mat) {
         /** @type {[number, number, number][]} */
         const points = [
-            [-.1, -.1, -.1],
-            [-.1,  .1, -.1],
-            [ .1,  .1, -.1],
-            [ .1, -.1, -.1],
-            [-.1, -.1, -.1],
+            [0, 0, 0],
+            Vec.UP.mul(this.length).xyz(), // TODO should do this with a matrix & a global mesh for bones instead
 
-            [-.1, -.1, .1],
-            [-.1,  .1, .1],
-            [ .1,  .1, .1],
-            [ .1, -.1, .1],
-            [-.1, -.1, .1],
+            // [ .1,  .1, -.1],
+            // [ .1,  .1, -.1],
+            // [ .1, -.1, -.1],
+            // [-.1, -.1, -.1],
+
+            // [-.1, -.1, .1],
+            // [-.1,  .1, .1],
+            // [ .1,  .1, .1],
+            // [ .1, -.1, .1],
+            // [-.1, -.1, .1],
         ];
-        // console.log(this.mat.data);
-        // debugger;
+        const newMat = mat.matmul(this.mat);
         const buf = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, buf);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(points.flat()), gl.DYNAMIC_DRAW);
         gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(a_Position);
-        gl.uniformMatrix4fv(u_ModelMat, false, mat.matmul(this.mat).data);
+        gl.uniformMatrix4fv(u_ModelMat, false, newMat.data);
+        gl.uniform4f(u_FragColor, 1, 0, 0, 1);
         gl.drawArrays(gl.POINTS, 0, points.length);
         gl.drawArrays(gl.LINE_STRIP, 0, points.length);
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        for(const child of this.children) child.render(gl, newMat);
+    }
+}
+
+
+// webgl textbook pg. 276 for drawElements stuff
+
+/**
+ * @implements {Renderable}
+ */
+class Mesh {
+    /** @param {Float32Array} verts @param {Uint16Array} indices */
+    constructor(verts, indices) {
+        /** @type {Float32Array} */
+        this.verts = verts;
+        /** @type {Uint16Array} */
+        this.indices = indices;
+    }
+
+    /** @param {WebGLRenderingContext} gl @param {Mat4x4} mat */
+    render(gl, mat) {
+        // TODO maybe shouldn't be creating these buffers every frame lol
+        const vertBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, this.verts, gl.DYNAMIC_DRAW);
+        const idxBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.indices, gl.DYNAMIC_DRAW); // TODO - STATIC_DRAW?
+        gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(a_Position);
+        gl.uniformMatrix4fv(u_ModelMat, false, mat.data);
+        // temp blend test stuff // TODO at least move this elsewhere
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        // color
+        gl.uniform4f(u_FragColor, 0, 1, 0, .25);
+        // draw mesh
+        gl.drawElements(gl.TRIANGLES, this.indices.length, gl.UNSIGNED_SHORT, 0);
+        // kinda janky (temporary) wireframe drawing
+        gl.uniform4f(u_FragColor, 0, 0, 1, 1);
+        for(let i = 0; i + 2 < this.verts.length; i += 3) {
+            gl.drawElements(gl.LINE_LOOP, 3, gl.UNSIGNED_SHORT, i * 2);
+        }
+        // free buffers (see above TODO)
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
     }
 }
 
 
 
-
-
-
-// /** 
-//  * @typedef {Object} SceneInitData
-//  * @property {Record<string, BoneInitData>} bones
-//  * 
-//  * @typedef {[number, number, number]} Vec3InitData
-//  * 
-//  * @typedef {Object} BoneInitData
-//  * @property {Vec3InitData} 
-//  */
-
-// class Bone {
-// }

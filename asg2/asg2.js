@@ -51,6 +51,8 @@ function setupWebGL() {
 		console.log('Failed to get the rendering context for WebGL');
 		return;
 	}
+
+	gl.enable(gl.DEPTH_TEST);
 	
 	clearCanvas();
 }
@@ -103,12 +105,35 @@ function setupBuffers() {
 function clearCanvas() {
 	// gl.clearColor(0.0, 0.0, 0.0, 1.0);
 	gl.clearColor(.8, .8, .8, 1.0);
-	gl.clear(gl.COLOR_BUFFER_BIT);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 }
 
 
 
-const armature = new Bone(Mat4x4.identity());
+const rootBone = new Bone(Mat4x4.identity());
+const anotherBone = new Bone(Mat4x4.translate(0, rootBone.length, 0));
+anotherBone.length = 2;
+rootBone.children.push(anotherBone);
+anotherBone.children.push(new Mesh(
+	new Float32Array([
+		1, 1, 1,
+		-1, 1, 1,
+		-1, -1, 1,
+		1, -1, 1,
+		1, -1, -1,
+		1, 1, -1,
+		-1, 1, -1,
+		-1, -1, -1,
+	].map(n => n / 2)),
+	new Uint16Array([
+		0, 1, 2, 0, 2, 3, // front
+		0, 3, 4, 0, 4, 5, // right
+		0, 5, 6, 0, 6, 1, // up
+		1, 6, 7, 1, 7, 2, // left
+		7, 4, 3, 7, 3, 2, // down
+		4, 7, 6, 4, 6, 5, // back
+	]),
+));
 const camera = new Camera();
 
 /** @type {number | DOMHighResTimeStamp} */
@@ -122,15 +147,16 @@ function tick(curTime) {
 	const delta = curTime - prevTickTime;
 	// ==== DON'T INSERT ANYTHING ELSE IN tick() BEFORE THIS LINE! ====
 
-	camera.pos = Vec.fromPolar(1, curTime / 1000);
-	camera.gaze = Vec.zero().sub(camera.pos);
-	// camera.pos = Vec.backwards().mul(1);
+	// camera.pos = Vec.fromPolar(6, curTime / 1000);
+	// camera.gazeTowards(Vec.ZERO);
+	// camera.pos = camera.pos.transform(Mat4x4.translate(0, 2, 0));
+	camera.pos = Vec.of(0, 2, 6);
 
-	// armature.mat = armature.mat.translate(delta / 1000 / 10, 0, 0);
-	// armature.mat = armature.mat.rotateY(delta / 1000);
+	rootBone.mat = Mat4x4.translate(...Vec.fromPolar(1, curTime / 1000).xyz()).rotateY(-curTime / 1000 - Math.PI / 2);
+	anotherBone.mat = Mat4x4.translate(0, rootBone.length, 0).rotateX((Math.cos(curTime / 1000) / 4 + .25) * Math.PI);
 
-	gl.uniform4f(u_FragColor, 1, 0, 0, 1);
-	armature.render(gl, camera.world2viewMat());
+	// gl.uniform4f(u_FragColor, 1, 0, 0, 1);
+	rootBone.render(gl, camera.world2viewMat());
 
 	// ==== DON'T INSERT ANYTHING ELSE IN tick() AFTER THIS LINE! ====
 	prevTickTime = curTime;

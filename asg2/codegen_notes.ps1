@@ -52,7 +52,6 @@ $(foreach($mrow in 1..4){ $(foreach($mcol in 1..4){
 
 # Vec constants
 ([ordered]@{zero='0, 0, 0'; one='1, 1, 1'; up='0, 1, 0'; down='0, -1, 0'; right='1, 0, 0'; left='-1, 0, 0'; backwards='0, 0, 1'; forwards='0, 0, -1'}).GetEnumerator() | %{@"
-    /** @private */ static _$($_.name.toupper()) = Vec.of($($_.value));
-    /** @returns {Vec} */ static $($_.name)() { return Vec._$($_.name.toupper()); }
+    static $($_.name.toupper()) = Vec.of($($_.value));
 "@} | Set-Clipboard
 

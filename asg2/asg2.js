@@ -53,6 +53,9 @@ function setupWebGL() {
 	}
 
 	gl.enable(gl.DEPTH_TEST);
+
+	gl.enable(gl.BLEND);
+	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	
 	clearCanvas();
 }
@@ -91,15 +94,27 @@ function setupShaders() {
 	}
 }
 
+/** @type {WebGLBuffer} */
+let vertexBuffer;
+/** @type {WebGLBuffer} */
+let indexBuffer;
 function setupBuffers() {
-	const vertexBuffer = gl.createBuffer();
-	if(!vertexBuffer) {
+	const vert = gl.createBuffer();
+	if(vert === null) {
 		console.log('failed to create vertex buffer');
 		return -1;
 	}
+	vertexBuffer = vert;
 	gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
 	gl.enableVertexAttribArray(a_Position);
 	gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+	const idx = gl.createBuffer();
+	if(idx === null) {
+		console.log('failed to create index buffer');
+		return -1;
+	}
+	indexBuffer = idx;
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
 }
 
 function clearCanvas() {

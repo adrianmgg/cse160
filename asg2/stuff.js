@@ -432,15 +432,21 @@ class Camera {
 class Bone {
     /**
      * @param {Mat4x4} mat
+     * @param {number} [length]
      */
-    constructor(mat) {
+    constructor(mat, length) {
         /** @type {Mat4x4} */
         this.mat = mat;
         /** @type {number} */
-        this.length = 1.0;
+        this.length = length !== undefined ? length : 1.0;
         /** @type {Renderable[]} */
         this.children = [];
     }
+
+    static BONE_DISPLAY_POINTS = new Float32Array([
+        0, 0, 0,
+        0, 1, 0,
+    ]);
 
     /**
      * @param {WebGLRenderingContext} gl
@@ -448,33 +454,19 @@ class Bone {
      */
     render(gl, mat) {
         /** @type {[number, number, number][]} */
-        const points = [
-            [0, 0, 0],
-            Vec.UP.mul(this.length).xyz(), // TODO should do this with a matrix & a global mesh for bones instead
-
-            // [ .1,  .1, -.1],
-            // [ .1,  .1, -.1],
-            // [ .1, -.1, -.1],
-            // [-.1, -.1, -.1],
-
-            // [-.1, -.1, .1],
-            // [-.1,  .1, .1],
-            // [ .1,  .1, .1],
-            // [ .1, -.1, .1],
-            // [-.1, -.1, .1],
-        ];
         const newMat = mat.matmul(this.mat);
-        const buf = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(points.flat()), gl.DYNAMIC_DRAW);
+        // const points = [
+        //     [0, 0, 0],
+        //     Vec.UP.mul(this.length).xyz(), // TODO should do this with a matrix & a global mesh for bones instead
+        // ];
+        gl.bufferData(gl.ARRAY_BUFFER, Bone.BONE_DISPLAY_POINTS, gl.DYNAMIC_DRAW);
         gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(a_Position);
         gl.uniformMatrix4fv(u_ModelMat, false, newMat.data);
         gl.uniform4f(u_FragColor, 1, 0, 0, 1);
-        gl.drawArrays(gl.POINTS, 0, points.length);
-        gl.drawArrays(gl.LINE_STRIP, 0, points.length);
-        gl.bindBuffer(gl.ARRAY_BUFFER, null);
         for(const child of this.children) child.render(gl, newMat);
+        gl.drawArrays(gl.POINTS, 0, Bone.BONE_DISPLAY_POINTS.length / 3);
+        gl.drawArrays(gl.LINE_STRIP, 0, Bone.BONE_DISPLAY_POINTS.length / 3);
     }
 }
 
@@ -527,21 +519,11 @@ class Model {
     /** @param {WebGLRenderingContext} gl @param {Mat4x4} mat */
     render(gl, mat) {
         const newMat = mat.matmul(this.mat);
-        // TODO maybe shouldn't be creating these buffers every frame lol
-        const vertBuf = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
-        gl.bufferData(gl.ARRAY_BUFFER, this.mesh.verts, gl.DYNAMIC_DRAW);
-        const idxBuf = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.mesh.indices, gl.DYNAMIC_DRAW); // TODO - STATIC_DRAW?
-        gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(a_Position);
+        gl.bufferData(gl.ARRAY_BUFFER, this.mesh.verts, gl.STATIC_DRAW);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.mesh.indices, gl.STATIC_DRAW);
         gl.uniformMatrix4fv(u_ModelMat, false, newMat.data);
-        // temp blend test stuff // TODO at least move this elsewhere
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         // color
-        gl.uniform4f(u_FragColor, 0, 1, 0, .25);
+        gl.uniform4f(u_FragColor, 0, 1, 0, .5);
         // draw mesh
         gl.drawElements(gl.TRIANGLES, this.mesh.indices.length, gl.UNSIGNED_SHORT, 0);
         // kinda janky (temporary) wireframe drawing
@@ -549,9 +531,6 @@ class Model {
         for(let i = 0; i + 2 < this.mesh.verts.length; i += 3) {
             gl.drawElements(gl.LINE_LOOP, 3, gl.UNSIGNED_SHORT, i * 2);
         }
-        // free buffers (see above TODO)
-        gl.bindBuffer(gl.ARRAY_BUFFER, null);
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
     }
 }
 

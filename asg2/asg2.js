@@ -114,26 +114,8 @@ const rootBone = new Bone(Mat4x4.identity());
 const anotherBone = new Bone(Mat4x4.translate(0, rootBone.length, 0));
 anotherBone.length = 2;
 rootBone.children.push(anotherBone);
-anotherBone.children.push(new Mesh(
-	new Float32Array([
-		1, 1, 1,
-		-1, 1, 1,
-		-1, -1, 1,
-		1, -1, 1,
-		1, -1, -1,
-		1, 1, -1,
-		-1, 1, -1,
-		-1, -1, -1,
-	].map(n => n / 2)),
-	new Uint16Array([
-		0, 1, 2, 0, 2, 3, // front
-		0, 3, 4, 0, 4, 5, // right
-		0, 5, 6, 0, 6, 1, // up
-		1, 6, 7, 1, 7, 2, // left
-		7, 4, 3, 7, 3, 2, // down
-		4, 7, 6, 4, 6, 5, // back
-	]),
-));
+const cube1 = new Model(Mesh.UNIT_CUBE);
+anotherBone.children.push(cube1);
 const camera = new Camera();
 
 /** @type {number | DOMHighResTimeStamp} */
@@ -154,6 +136,8 @@ function tick(curTime) {
 
 	rootBone.mat = Mat4x4.translate(...Vec.fromPolar(1, curTime / 1000).xyz()).rotateY(-curTime / 1000 - Math.PI / 2);
 	anotherBone.mat = Mat4x4.translate(0, rootBone.length, 0).rotateX((Math.cos(curTime / 1000) / 4 + .25) * Math.PI);
+
+	cube1.mat = Mat4x4.scale((Math.sin(curTime / 1000) + 1) / 4 + 1);
 
 	// gl.uniform4f(u_FragColor, 1, 0, 0, 1);
 	rootBone.render(gl, camera.world2viewMat());

@@ -1,4 +1,5 @@
 // @ts-check
+'use strict';
 
 // import some types from our typescript file (can't declare typescript interface in jsdoc comments)
 /** @typedef { import('./types').Renderable } Renderable */
@@ -181,12 +182,16 @@ class Mat4x4 {
         );
     }
     /**
-     * @param {number} x
-     * @param {number} y
-     * @param {number} z
+     * @param {[number] | [number, number, number]} args
      * @returns {Mat4x4}
      */
-    static scale(x, y, z) {
+    static scale(...args) {
+        let x, y, z;
+        if(args.length === 3) {
+            [x, y, z] = args;
+        } else {
+            x = y = z = args[0];
+        }
         return Mat4x4.of(
             x, 0, 0, 0,
             0, y, 0, 0,
@@ -474,42 +479,74 @@ class Bone {
 }
 
 
-// webgl textbook pg. 276 for drawElements stuff
+
+class Mesh {
+    /** @param {Float32Array | number[]} verts @param {Uint16Array | number[]} indices */
+    constructor(verts, indices) {
+        // these shouldn't be constructed very often so i'm not too worried about any minor performance hits from the instanceof stuff
+        /** @type {Float32Array} */
+        this.verts = verts instanceof Float32Array ? verts : new Float32Array(verts);
+        /** @type {Uint16Array} */
+        this.indices = indices instanceof Uint16Array ? indices : new Uint16Array(indices);
+    }
+    
+    // https://github.com/blender/blender/blob/594f47ecd2d5367ca936cf6fc6ec8168c2b360d0/source/blender/bmesh/operators/bmo_primitive.c
+    
+    // numbers from webgl textbook (but modified to be unit cube)
+    static UNIT_CUBE = new Mesh([
+        .5, .5, .5,
+        -.5, .5, .5,
+        -.5, -.5, .5,
+        .5, -.5, .5,
+        .5, -.5, -.5,
+        .5, .5, -.5,
+        -.5, .5, -.5,
+        -.5, -.5, -.5,
+    ],[
+        0, 1, 2, 0, 2, 3, // front
+        0, 3, 4, 0, 4, 5, // right
+        0, 5, 6, 0, 6, 1, // up
+        1, 6, 7, 1, 7, 2, // left
+        7, 4, 3, 7, 3, 2, // down
+        4, 7, 6, 4, 6, 5, // back
+    ]);
+}
 
 /**
  * @implements {Renderable}
  */
-class Mesh {
-    /** @param {Float32Array} verts @param {Uint16Array} indices */
-    constructor(verts, indices) {
-        /** @type {Float32Array} */
-        this.verts = verts;
-        /** @type {Uint16Array} */
-        this.indices = indices;
+class Model {
+    /** @param {Mesh} mesh @param {Mat4x4} [mat] */
+    constructor(mesh, mat) {
+        /** @type {Mesh} */
+        this.mesh = mesh;
+        /** @type {Mat4x4} */
+        this.mat = mat !== undefined ? mat : Mat4x4.identity();
     }
 
     /** @param {WebGLRenderingContext} gl @param {Mat4x4} mat */
     render(gl, mat) {
+        const newMat = mat.matmul(this.mat);
         // TODO maybe shouldn't be creating these buffers every frame lol
         const vertBuf = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
-        gl.bufferData(gl.ARRAY_BUFFER, this.verts, gl.DYNAMIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, this.mesh.verts, gl.DYNAMIC_DRAW);
         const idxBuf = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.indices, gl.DYNAMIC_DRAW); // TODO - STATIC_DRAW?
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.mesh.indices, gl.DYNAMIC_DRAW); // TODO - STATIC_DRAW?
         gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(a_Position);
-        gl.uniformMatrix4fv(u_ModelMat, false, mat.data);
+        gl.uniformMatrix4fv(u_ModelMat, false, newMat.data);
         // temp blend test stuff // TODO at least move this elsewhere
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         // color
         gl.uniform4f(u_FragColor, 0, 1, 0, .25);
         // draw mesh
-        gl.drawElements(gl.TRIANGLES, this.indices.length, gl.UNSIGNED_SHORT, 0);
+        gl.drawElements(gl.TRIANGLES, this.mesh.indices.length, gl.UNSIGNED_SHORT, 0);
         // kinda janky (temporary) wireframe drawing
         gl.uniform4f(u_FragColor, 0, 0, 1, 1);
-        for(let i = 0; i + 2 < this.verts.length; i += 3) {
+        for(let i = 0; i + 2 < this.mesh.verts.length; i += 3) {
             gl.drawElements(gl.LINE_LOOP, 3, gl.UNSIGNED_SHORT, i * 2);
         }
         // free buffers (see above TODO)

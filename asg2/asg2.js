@@ -109,6 +109,7 @@ function clearCanvas() {
 
 
 const armature = new Bone(Mat4x4.identity());
+const camera = new Camera();
 
 /** @type {number | DOMHighResTimeStamp} */
 let prevTickTime = 0;
@@ -118,14 +119,18 @@ let prevTickTime = 0;
  */
 function tick(curTime) {
 	clearCanvas();
-
 	const delta = curTime - prevTickTime;
+	// ==== DON'T INSERT ANYTHING ELSE IN tick() BEFORE THIS LINE! ====
+
+	camera.pos = Vec.fromPolar(1, curTime / 1000);
+	camera.gaze = Vec.zero().sub(camera.pos);
+	// camera.pos = Vec.backwards().mul(1);
 
 	// armature.mat = armature.mat.translate(delta / 1000 / 10, 0, 0);
-	armature.mat = armature.mat.rotateY(delta / 1000);
+	// armature.mat = armature.mat.rotateY(delta / 1000);
 
 	gl.uniform4f(u_FragColor, 1, 0, 0, 1);
-	armature.render(gl, Mat4x4.identity());
+	armature.render(gl, camera.world2viewMat());
 
 	// ==== DON'T INSERT ANYTHING ELSE IN tick() AFTER THIS LINE! ====
 	prevTickTime = curTime;

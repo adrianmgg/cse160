@@ -13,6 +13,32 @@ $matsize = 4
 function colmajoridx($i, $j) { "$(($i-1)+(($j-1)*$matsize))".PadLeft(2,' ') }
 $(foreach($i in 1..$matsize){$(foreach($j in 1..$matsize){ $(foreach($k in 1..$matsize){"a[$(colmajoridx $i $k)]*b[$(colmajoridx $k $j)]"}) -join '+' };'') -join ', '}) -join "`n"
 
+# mat componentwise ops
+function capitalize($s) { "$($s.substring(0,1).toupper())$($s.substring(1))" }
+@(@('add','+'),@('sub', '-'),@('mul', '*'),@('div', '/')) | %{$name, $op = $_; @"
+    /** @param {number} a @returns {Mat4x4} */
+    componentwise$(capitalize $name)(a) {
+        return new Mat4x4(this.data.map(v => v $op a));
+    }
+"@}
+
+# Mat4x4 cofactorMatrix
+# function det3($a,$b,$c,$d,$e,$f,$g,$h,$i){ "$a*$e*$i - $a*$f*$h - $b*$d*$i + $b*$f*$g + $c*$d*$h - $c*$e*$g" }
+function det3($a,$b,$c,$d,$e,$f,$g,$h,$i){ "$a*($e*$i-$f*$h)-$b*$d*$i+$b*$f*$g+$c*($d*$h-$e*$g)" }
+function det3_negated($a,$b,$c,$d,$e,$f,$g,$h,$i){"$a*($f*$h-$e*$i)+$b*$d*$i-$b*$f*$g+$c*($e*$g-$d*$h)"}
+$(foreach($mrow in 1..4){ $(foreach($mcol in 1..4){
+  # "a_$mrow$mcol"
+  $det3mat = foreach($drow in 1..4|where {$_-ne$mrow}) { foreach($dcol in 1..4|where{$_-ne$mcol}) {
+    "d[$(  "$(  ($drow-1) + (($dcol-1)*4)  )".PadLeft(2,' ')  )]"
+  } }
+  if(($mrow+$mcol)%2 -eq 0){det3 @det3mat}else{det3_negated @det3mat}
+})-join', ' })-join",`n" | Set-Clipboard
+
+# Mat4x4 transpose
+$(foreach($mrow in 1..4){ $(foreach($mcol in 1..4){
+  "this.get($($mcol-1),$($mrow-1))"
+})-join', ' })-join",`n" | Set-Clipboard
+
 # Vec methods
 @(@('add','+'),@('sub', '-'),@('mul', '*'),@('div', '/')) | %{$name, $op = $_; @"
     /** @param {Vec | number} a @returns {Vec} */

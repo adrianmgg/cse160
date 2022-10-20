@@ -53,9 +53,6 @@ function setupWebGL() {
 	}
 
 	gl.enable(gl.DEPTH_TEST);
-
-	gl.enable(gl.BLEND);
-	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	
 	clearCanvas();
 }
@@ -94,27 +91,15 @@ function setupShaders() {
 	}
 }
 
-/** @type {WebGLBuffer} */
-let vertexBuffer;
-/** @type {WebGLBuffer} */
-let indexBuffer;
 function setupBuffers() {
-	const vert = gl.createBuffer();
-	if(vert === null) {
+	const vertexBuffer = gl.createBuffer();
+	if(!vertexBuffer) {
 		console.log('failed to create vertex buffer');
 		return -1;
 	}
-	vertexBuffer = vert;
 	gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
 	gl.enableVertexAttribArray(a_Position);
 	gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
-	const idx = gl.createBuffer();
-	if(idx === null) {
-		console.log('failed to create index buffer');
-		return -1;
-	}
-	indexBuffer = idx;
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
 }
 
 function clearCanvas() {
@@ -125,13 +110,29 @@ function clearCanvas() {
 
 
 
-const rootBone = new Bone(Mat4x4.identity());
-const anotherBone = new Bone(Mat4x4.translate(0, rootBone.length, 0));
-anotherBone.length = 2;
-rootBone.children.push(anotherBone);
-const cube1 = new Model(Mesh.UNIT_CUBE);
-anotherBone.children.push(cube1);
 const camera = new Camera();
+
+// const rootBone = new Bone(Mat4x4.identity());
+// const anotherBone = new Bone(Mat4x4.translate(0, rootBone.length, 0));
+// anotherBone.length = 2;
+// rootBone.children.push(anotherBone);
+// const cube1 = new Model(Mesh.UNIT_CUBE);
+// anotherBone.children.push(cube1);
+
+/** @type {Bone[]} */
+const tailBones = [];
+const rootBone = new Bone(Mat4x4.identity());
+(() => {
+	let curBone = rootBone;
+	for(let i = 0; i < 32; i++) {
+		const newBone = new Bone(Mat4x4.translate(0, curBone.length, 0), curBone.length * 0.9);
+		newBone.baseMat = newBone.mat;
+		newBone.children.push(new Model(Mesh.UNIT_CUBE, Mat4x4.scale(newBone.length)));
+		curBone.children.push(newBone);
+		tailBones.push(newBone);
+		curBone = newBone;
+	}
+})();
 
 /** @type {number | DOMHighResTimeStamp} */
 let prevTickTime = 0;
@@ -142,24 +143,33 @@ let prevTickTime = 0;
 function tick(curTime) {
 	clearCanvas();
 	const delta = curTime - prevTickTime;
+	for(let i = 0; i < 8; i++){
 	// ==== DON'T INSERT ANYTHING ELSE IN tick() BEFORE THIS LINE! ====
 
-	// camera.pos = Vec.fromPolar(6, curTime / 1000);
-	// camera.gazeTowards(Vec.ZERO);
-	// camera.pos = camera.pos.transform(Mat4x4.translate(0, 2, 0));
-	camera.pos = Vec.of(0, 2, 6);
+	camera.pos = Vec.fromPolar(6, curTime / 1000);
+	camera.gazeTowards(Vec.ZERO);
+	camera.pos = camera.pos.transform(Mat4x4.translate(0, 4, 0));
+	// camera.pos = Vec.of(0, 2, 6);
 
-	rootBone.mat = Mat4x4.translate(...Vec.fromPolar(1, curTime / 1000).xyz()).rotateY(-curTime / 1000 - Math.PI / 2);
-	anotherBone.mat = Mat4x4.translate(0, rootBone.length, 0).rotateX((Math.cos(curTime / 1000) / 4 + .25) * Math.PI);
+	// rootBone.mat = Mat4x4.translate(...Vec.fromPolar(1, curTime / 1000).xyz()).rotateY(-curTime / 1000 - Math.PI / 2);
+	// anotherBone.mat = Mat4x4.translate(0, rootBone.length, 0).rotateX((Math.cos(curTime / 1000) / 4 + .25) * Math.PI);
 
-	cube1.mat = Mat4x4.scale((Math.sin(curTime / 1000) + 1) / 4 + 1);
+	// cube1.mat = Mat4x4.scale((Math.sin(curTime / 1000) + 1) / 4 + 1);
+	const rotMat = Mat4x4.rotateX((Math.sin(curTime / 1000 * 1.1432492432) + 1) / 16 * Math.PI);
+	for(const bone of tailBones) {
+		// bone.mat = bone.baseMat.matmul(rotMat);
+		// bone.mat.set(bone.baseMat.clone()).matmulInPlace(rotMat);
+	}
 
-	// gl.uniform4f(u_FragColor, 1, 0, 0, 1);
+	// // gl.uniform4f(u_FragColor, 1, 0, 0, 1);
 	rootBone.render(gl, camera.world2viewMat());
 
 	// ==== DON'T INSERT ANYTHING ELSE IN tick() AFTER THIS LINE! ====
+	}
 	prevTickTime = curTime;
 	requestAnimationFrame(tick);
+	// requestAnimationFrame((t) => {for(let i = 0; i < 2; i++) tick(t)});
+	// setTimeout(() => tick(performance.now()), 0);
 }
 
 // function clearAll() {

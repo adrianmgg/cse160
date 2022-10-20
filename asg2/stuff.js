@@ -4,6 +4,8 @@
 // import some types from our typescript file (can't declare typescript interface in jsdoc comments)
 /** @typedef { import('./types').Renderable } Renderable */
 
+/** @typedef {[number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]} ArrayOf16Numbers */
+
 class Mat4x4 {
     /** @private */
     static _IDENTITY = Mat4x4.of(
@@ -46,7 +48,7 @@ class Mat4x4 {
 
     /**
      * construct new matrix from ROW-MAJOR values
-     * @param  {[number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]} a
+     * @param  {ArrayOf16Numbers} a
      * @returns {Mat4x4}
      */
     static of(...a) {
@@ -58,13 +60,35 @@ class Mat4x4 {
      * @returns {Mat4x4}
      */
     matmul(other) {
-        const a = this.data, b = other.data;
-        return Mat4x4.of(
-            a[ 0]*b[ 0]+a[ 4]*b[ 1]+a[ 8]*b[ 2]+a[12]*b[ 3], a[ 0]*b[ 4]+a[ 4]*b[ 5]+a[ 8]*b[ 6]+a[12]*b[ 7], a[ 0]*b[ 8]+a[ 4]*b[ 9]+a[ 8]*b[10]+a[12]*b[11], a[ 0]*b[12]+a[ 4]*b[13]+a[ 8]*b[14]+a[12]*b[15],
-            a[ 1]*b[ 0]+a[ 5]*b[ 1]+a[ 9]*b[ 2]+a[13]*b[ 3], a[ 1]*b[ 4]+a[ 5]*b[ 5]+a[ 9]*b[ 6]+a[13]*b[ 7], a[ 1]*b[ 8]+a[ 5]*b[ 9]+a[ 9]*b[10]+a[13]*b[11], a[ 1]*b[12]+a[ 5]*b[13]+a[ 9]*b[14]+a[13]*b[15],
-            a[ 2]*b[ 0]+a[ 6]*b[ 1]+a[10]*b[ 2]+a[14]*b[ 3], a[ 2]*b[ 4]+a[ 6]*b[ 5]+a[10]*b[ 6]+a[14]*b[ 7], a[ 2]*b[ 8]+a[ 6]*b[ 9]+a[10]*b[10]+a[14]*b[11], a[ 2]*b[12]+a[ 6]*b[13]+a[10]*b[14]+a[14]*b[15],
-            a[ 3]*b[ 0]+a[ 7]*b[ 1]+a[11]*b[ 2]+a[15]*b[ 3], a[ 3]*b[ 4]+a[ 7]*b[ 5]+a[11]*b[ 6]+a[15]*b[ 7], a[ 3]*b[ 8]+a[ 7]*b[ 9]+a[11]*b[10]+a[15]*b[11], a[ 3]*b[12]+a[ 7]*b[13]+a[11]*b[14]+a[15]*b[15],
-        );
+        // const a = this.data, b = other.data;
+        // return Mat4x4.of(
+        //     a[ 0]*b[ 0]+a[ 4]*b[ 1]+a[ 8]*b[ 2]+a[12]*b[ 3], a[ 0]*b[ 4]+a[ 4]*b[ 5]+a[ 8]*b[ 6]+a[12]*b[ 7], a[ 0]*b[ 8]+a[ 4]*b[ 9]+a[ 8]*b[10]+a[12]*b[11], a[ 0]*b[12]+a[ 4]*b[13]+a[ 8]*b[14]+a[12]*b[15],
+        //     a[ 1]*b[ 0]+a[ 5]*b[ 1]+a[ 9]*b[ 2]+a[13]*b[ 3], a[ 1]*b[ 4]+a[ 5]*b[ 5]+a[ 9]*b[ 6]+a[13]*b[ 7], a[ 1]*b[ 8]+a[ 5]*b[ 9]+a[ 9]*b[10]+a[13]*b[11], a[ 1]*b[12]+a[ 5]*b[13]+a[ 9]*b[14]+a[13]*b[15],
+        //     a[ 2]*b[ 0]+a[ 6]*b[ 1]+a[10]*b[ 2]+a[14]*b[ 3], a[ 2]*b[ 4]+a[ 6]*b[ 5]+a[10]*b[ 6]+a[14]*b[ 7], a[ 2]*b[ 8]+a[ 6]*b[ 9]+a[10]*b[10]+a[14]*b[11], a[ 2]*b[12]+a[ 6]*b[13]+a[10]*b[14]+a[14]*b[15],
+        //     a[ 3]*b[ 0]+a[ 7]*b[ 1]+a[11]*b[ 2]+a[15]*b[ 3], a[ 3]*b[ 4]+a[ 7]*b[ 5]+a[11]*b[ 6]+a[15]*b[ 7], a[ 3]*b[ 8]+a[ 7]*b[ 9]+a[11]*b[10]+a[15]*b[11], a[ 3]*b[12]+a[ 7]*b[13]+a[11]*b[14]+a[15]*b[15],
+        // );
+        return this.clone().matmulInPlace(other);
+    }
+    /** @param {Mat4x4} other @returns {Mat4x4} */
+    matmulInPlace(other) {
+        this.data.set([
+            this.data[ 0]*other.data[ 0] + this.data[ 4]*other.data[ 1] + this.data[ 8]*other.data[ 2] + this.data[12]*other.data[ 3], this.data[ 1]*other.data[ 0] + this.data[ 5]*other.data[ 1] + this.data[ 9]*other.data[ 2] + this.data[13]*other.data[ 3], this.data[ 2]*other.data[ 0] + this.data[ 6]*other.data[ 1] + this.data[10]*other.data[ 2] + this.data[14]*other.data[ 3], this.data[ 3]*other.data[ 0] + this.data[ 7]*other.data[ 1] + this.data[11]*other.data[ 2] + this.data[15]*other.data[ 3],
+            this.data[ 0]*other.data[ 4] + this.data[ 4]*other.data[ 5] + this.data[ 8]*other.data[ 6] + this.data[12]*other.data[ 7], this.data[ 1]*other.data[ 4] + this.data[ 5]*other.data[ 5] + this.data[ 9]*other.data[ 6] + this.data[13]*other.data[ 7], this.data[ 2]*other.data[ 4] + this.data[ 6]*other.data[ 5] + this.data[10]*other.data[ 6] + this.data[14]*other.data[ 7], this.data[ 3]*other.data[ 4] + this.data[ 7]*other.data[ 5] + this.data[11]*other.data[ 6] + this.data[15]*other.data[ 7],
+            this.data[ 0]*other.data[ 8] + this.data[ 4]*other.data[ 9] + this.data[ 8]*other.data[10] + this.data[12]*other.data[11], this.data[ 1]*other.data[ 8] + this.data[ 5]*other.data[ 9] + this.data[ 9]*other.data[10] + this.data[13]*other.data[11], this.data[ 2]*other.data[ 8] + this.data[ 6]*other.data[ 9] + this.data[10]*other.data[10] + this.data[14]*other.data[11], this.data[ 3]*other.data[ 8] + this.data[ 7]*other.data[ 9] + this.data[11]*other.data[10] + this.data[15]*other.data[11],
+            this.data[ 0]*other.data[12] + this.data[ 4]*other.data[13] + this.data[ 8]*other.data[14] + this.data[12]*other.data[15], this.data[ 1]*other.data[12] + this.data[ 5]*other.data[13] + this.data[ 9]*other.data[14] + this.data[13]*other.data[15], this.data[ 2]*other.data[12] + this.data[ 6]*other.data[13] + this.data[10]*other.data[14] + this.data[14]*other.data[15], this.data[ 3]*other.data[12] + this.data[ 7]*other.data[13] + this.data[11]*other.data[14] + this.data[15]*other.data[15]
+        ]);
+        return this;
+    }
+
+    /** @param {Mat4x4} other @returns {Mat4x4} */
+    set(other) {
+        this.data.set(other.data);
+        return this;
+    }
+
+    /** @returns {Mat4x4} */
+    clone() {
+        return new Mat4x4(new Float32Array(this.data))
     }
 
     /** @param {number} a @returns {Mat4x4} */
@@ -425,28 +449,24 @@ class Camera {
 }
 
 
-
 /**
  * @implements {Renderable}
  */
 class Bone {
     /**
      * @param {Mat4x4} mat
-     * @param {number} [length]
      */
-    constructor(mat, length) {
+    constructor(mat) {
         /** @type {Mat4x4} */
         this.mat = mat;
         /** @type {number} */
-        this.length = length !== undefined ? length : 1.0;
+        this.length = 1.0;
         /** @type {Renderable[]} */
         this.children = [];
-    }
 
-    static BONE_DISPLAY_POINTS = new Float32Array([
-        0, 0, 0,
-        0, 1, 0,
-    ]);
+        /** @private @type {Mat4x4} */
+        this.tmpMat = Mat4x4.identity().clone();
+    }
 
     /**
      * @param {WebGLRenderingContext} gl
@@ -454,19 +474,49 @@ class Bone {
      */
     render(gl, mat) {
         /** @type {[number, number, number][]} */
+<<<<<<< Updated upstream
+        const points = [
+            [0, 0, 0],
+            Vec.UP.mul(this.length).xyz(), // TODO should do this with a matrix & a global mesh for bones instead
+
+            // [ .1,  .1, -.1],
+            // [ .1,  .1, -.1],
+            // [ .1, -.1, -.1],
+            // [-.1, -.1, -.1],
+
+            // [-.1, -.1, .1],
+            // [-.1,  .1, .1],
+            // [ .1,  .1, .1],
+            // [ .1, -.1, .1],
+            // [-.1, -.1, .1],
+        ];
         const newMat = mat.matmul(this.mat);
+        const buf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(points.flat()), gl.DYNAMIC_DRAW);
+=======
         // const points = [
         //     [0, 0, 0],
         //     Vec.UP.mul(this.length).xyz(), // TODO should do this with a matrix & a global mesh for bones instead
         // ];
+        // const newMat = mat.matmul(this.mat);
+        this.tmpMat.set(mat).matmulInPlace(this.mat);
         gl.bufferData(gl.ARRAY_BUFFER, Bone.BONE_DISPLAY_POINTS, gl.DYNAMIC_DRAW);
+>>>>>>> Stashed changes
         gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(a_Position);
-        gl.uniformMatrix4fv(u_ModelMat, false, newMat.data);
+        gl.uniformMatrix4fv(u_ModelMat, false, this.tmpMat.data);
         gl.uniform4f(u_FragColor, 1, 0, 0, 1);
+<<<<<<< Updated upstream
+        gl.drawArrays(gl.POINTS, 0, points.length);
+        gl.drawArrays(gl.LINE_STRIP, 0, points.length);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
         for(const child of this.children) child.render(gl, newMat);
+=======
         gl.drawArrays(gl.POINTS, 0, Bone.BONE_DISPLAY_POINTS.length / 3);
         gl.drawArrays(gl.LINE_STRIP, 0, Bone.BONE_DISPLAY_POINTS.length / 3);
+        for(const child of this.children) child.render(gl, this.tmpMat);
+>>>>>>> Stashed changes
     }
 }
 
@@ -519,11 +569,21 @@ class Model {
     /** @param {WebGLRenderingContext} gl @param {Mat4x4} mat */
     render(gl, mat) {
         const newMat = mat.matmul(this.mat);
-        gl.bufferData(gl.ARRAY_BUFFER, this.mesh.verts, gl.STATIC_DRAW);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.mesh.indices, gl.STATIC_DRAW);
+        // TODO maybe shouldn't be creating these buffers every frame lol
+        const vertBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, this.mesh.verts, gl.DYNAMIC_DRAW);
+        const idxBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.mesh.indices, gl.DYNAMIC_DRAW); // TODO - STATIC_DRAW?
+        gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(a_Position);
         gl.uniformMatrix4fv(u_ModelMat, false, newMat.data);
+        // temp blend test stuff // TODO at least move this elsewhere
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         // color
-        gl.uniform4f(u_FragColor, 0, 1, 0, .5);
+        gl.uniform4f(u_FragColor, 0, 1, 0, .25);
         // draw mesh
         gl.drawElements(gl.TRIANGLES, this.mesh.indices.length, gl.UNSIGNED_SHORT, 0);
         // kinda janky (temporary) wireframe drawing
@@ -531,6 +591,9 @@ class Model {
         for(let i = 0; i + 2 < this.mesh.verts.length; i += 3) {
             gl.drawElements(gl.LINE_LOOP, 3, gl.UNSIGNED_SHORT, i * 2);
         }
+        // free buffers (see above TODO)
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
     }
 }
 

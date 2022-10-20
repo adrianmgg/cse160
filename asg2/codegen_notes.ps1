@@ -8,7 +8,7 @@ $rowmajor = foreach($a in 1..4){foreach($b in 1..4){ "a$($a)$($b)" }}
 $colmajor = foreach($a in 1..4){foreach($b in 1..4){ "a$($b)$($a)" }}
 ($rowmajor | %{ "a[$($colmajor.IndexOf($_))]" }) -join ', '
 
-# Mat4.multiply
+# Mat4.matmul
 $matsize = 4
 function colmajoridx($i, $j) { "$(($i-1)+(($j-1)*$matsize))".PadLeft(2,' ') }
 $(foreach($i in 1..$matsize){$(foreach($j in 1..$matsize){ $(foreach($k in 1..$matsize){"a[$(colmajoridx $i $k)]*b[$(colmajoridx $k $j)]"}) -join '+' };'') -join ', '}) -join "`n"

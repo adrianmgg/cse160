@@ -56,7 +56,6 @@ function easeOutBack(x) {
 
 /** @param {number} t @param {number} a @param {number} b @returns {number} */
 function lerp(t, a, b) {
-    // TODO clamp?
     return a * t + b * (1 - t);
 }
 

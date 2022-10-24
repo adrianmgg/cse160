@@ -257,7 +257,6 @@ function setupScene() {
 	footLBone.headChildren.push(foot);
 	footRBone.headChildren.push(foot);
 	// head
-	// TODO which is our forwards direction? theres some conflicting stuff
 	const headBone = new Bone(Mat4x4.scale(1.25), 1, 'head');
 	torsoBone.tailChildren.push(headBone);
 	// const head = new Model(headMesh, Mat4x4.scale(1.25).translate(0, -.1, 0), marColorSkin);
@@ -300,7 +299,6 @@ let globalViewHeight = 2;
 let fps = 1.0;
 /** @type {number | DOMHighResTimeStamp} */
 let prevTickTime = 0;
-// TODO: haven't actually read their instructions on how to write a tick func yet, should probably do that
 /**
  * @param {DOMHighResTimeStamp} curTime
  */

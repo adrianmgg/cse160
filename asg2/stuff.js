@@ -276,7 +276,6 @@ class Mat4x4 {
     /** @param {number} tx @param {number} ty @param {number} tz @returns {Mat4x4} */
     static rotateXYZ(tx, ty, tz) {
         // source: based on https://github.com/blender/blender/blob/594f47ecd2d5367ca936cf6fc6ec8168c2b360d0/source/blender/blenlib/intern/math_rotation.c#L1648-L1686
-        // TODO verify that i've got the axes and indices correct here
         const ci = Math.cos(tx);
         const cj = Math.cos(ty);
         const ch = Math.cos(tz);
@@ -579,12 +578,6 @@ class Bone {
      * @param {Mat4x4} mat
      */
     render(gl, mat) {
-        // /** @type {[number, number, number][]} */
-        // const points = [
-        //     [0, 0, 0],
-        //     Vec.UP.mul(this.length).xyz(), // TODO should do this with a matrix & a global mesh for bones instead
-        // ];
-        // const drawBones = !false; // draw bones? // TODO should add a better way to toggle this
         let baseMat = this.mat;
         if(this.animMat !== null) baseMat = baseMat.matmul(this.animMat);
         if(showBones) {
@@ -596,8 +589,6 @@ class Bone {
             gl.uniform4f(u_FragColor, 1, 0, 0, 1);
             // adjust depth range so we render on top
             gl.depthRange(0, 0.01);
-            // gl.drawArrays(gl.POINTS, 0, Bone.BONE_DISPLAY_POINTS.length / 3);
-            // gl.lineWidth(10);
             gl.drawArrays(gl.LINE_STRIP, 0, Bone.BONE_DISPLAY_POINTS.length / 3);
             // TODO this depthRange fiddling stuff should probably move somewhere else
             gl.depthRange(0.01, 1.0);

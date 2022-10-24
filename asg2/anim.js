@@ -158,6 +158,8 @@ class TransformAnimator {
         // @ts-ignore
         this.target[this.prop] = Mat4x4.locRotScale(this._a_posX(t), this._a_posY(t), this._a_posZ(t), this._a_rotX(t), this._a_rotY(t), this._a_rotZ(t), this._a_sclX(t), this._a_sclY(t), this._a_sclZ(t));
     }
+
+    onActivate() {}
 }
 
 /**
@@ -174,6 +176,8 @@ class AnimatorGroup {
     exec(t) {
         for(const animator of this.animators) animator.exec(t);
     }
+
+    onActivate() {}
 }
 
 /**
@@ -186,10 +190,15 @@ class AnimatorController {
         this.animators = animators;
         /** @private @type {string | null} */
         this.__currentAnimator = null;
+        /** @private @type {HTMLInputElement[]} */
+        this.radios = []; // TODO prob a better way of doing this part lol
     }
 
     set currentAnimator(v) {
         this.__currentAnimator = v;
+        for(const radio of this.radios) {
+            if(radio.value === (v === null ? '' : v)) radio.checked = true;
+        }
     }
     get currentAnimator() {
         return this.__currentAnimator;
@@ -219,9 +228,11 @@ class AnimatorController {
             radio.checked = this.currentAnimator === null;
             radio.addEventListener('change', onRadioChange);
             radio.value = '';
+            this.radios.push(radio);
             caption.appendChild(radio);
         }
         for(const name in this.animators) {
+            const animator = this.animators[name];
             const animatorContainer = document.createElement('figure');
             animatorsContainer.appendChild(animatorContainer);
             const acCaption = document.createElement('figcaption');
@@ -233,7 +244,12 @@ class AnimatorController {
             radio.checked = this.currentAnimator === name;
             radio.value = name;
             radio.addEventListener('change', onRadioChange);
+            this.radios.push(radio);
             acCaption.appendChild(radio);
+            if(animator.initUI !== undefined) {
+                // @ts-ignore
+                animatorContainer.appendChild(animator.initUI());
+            }
         }
         return root;
     }
@@ -241,5 +257,95 @@ class AnimatorController {
     /** @param {number} t */
     exec(t) {
         if(this.currentAnimator !== null) this.animators[this.currentAnimator].exec(t);
+    }
+
+    onActivate() {}
+}
+
+/**
+ * @implements {Animator}
+ */
+class ManualControlAnimator {
+    /** @param {Bone} armatureRoot */
+    constructor(armatureRoot) {
+        /** @type {Bone} */
+        this.armatureRoot = armatureRoot;
+        /** @type {Record<string, [number, number, number, number, number, number, number, number, number]>} */
+        this.data = {};
+    }
+
+    /** @private @param {HTMLElement} target @param {Bone} bone */
+    buildUI(target, bone) {
+        if(!(bone.name in this.data)) this.data[bone.name] = [0, 0, 0, 0, 0, 0, 1, 1, 1];
+        const container = document.createElement('details');
+        const caption = document.createElement('summary');
+        container.appendChild(caption);
+        caption.textContent = bone.name;
+        /** @type {[string, [number, string, number, number, number][]][]} */
+        const sliderGroupsInfo = [
+            ['position', [
+                [0, 'x', -10, 0, 10],
+                [1, 'y', -10, 0, 10],
+                [2, 'z', -10, 0, 10],
+            ]],
+            ['rotation', [
+                [3, 'x', -Math.PI, 0, Math.PI],
+                [4, 'y', -Math.PI, 0, Math.PI],
+                [5, 'z', -Math.PI, 0, Math.PI],
+            ]],
+            ['scale', [
+                [6, 'x', 0.1, 1, 5],
+                [7, 'y', 0.1, 1, 5],
+                [8, 'z', 0.1, 1, 5],
+            ]],
+        ];
+        for(const [sliderGroupName, sliderGroup] of sliderGroupsInfo) {
+            const sgc = document.createElement('details');
+            container.appendChild(sgc);
+            const sgcc = document.createElement('summary');
+            sgc.appendChild(sgcc);
+            sgcc.textContent = sliderGroupName;
+            for(const [dataIdx, sliderName, min, def, max] of sliderGroup) {
+                const label = document.createElement('label');
+                label.textContent = sliderName;
+                sgc.appendChild(label);
+                const slider = document.createElement('input');
+                slider.type = 'range';
+                slider.min = min;
+                slider.max = max;
+                slider.value = def;
+                slider.step = 'any';
+                label.appendChild(slider);
+                const onSliderChange = (e) => {
+                    this.data[bone.name][dataIdx] = slider.valueAsNumber;
+                };
+                slider.addEventListener('input', onSliderChange);
+                slider.addEventListener('change', onSliderChange);
+            }
+        }
+        target.appendChild(container);
+        for(const child of bone.headChildren) if(child instanceof Bone) this.buildUI(target, child);
+        for(const child of bone.tailChildren) if(child instanceof Bone) this.buildUI(target, child);
+    }
+
+    initUI() {
+        const root = document.createElement('div');
+        this.buildUI(root, this.armatureRoot);
+        return root;
+    }
+
+    /** @private @param {Bone} bone */
+    _execWalk(bone) {
+        bone.animMat = Mat4x4.locRotScale(...this.data[bone.name]);
+        for(const child of bone.headChildren) if(child instanceof Bone) this._execWalk(child);
+        for(const child of bone.tailChildren) if(child instanceof Bone) this._execWalk(child);
+    }
+
+    /** @param {number} t */
+    exec(t) {
+        this._execWalk(this.armatureRoot);
+    }
+
+    onActivate() {
     }
 }

@@ -521,9 +521,10 @@ class Camera {
 class Bone {
     /**
      * @param {Mat4x4} mat
-     * @param {number} [length]
+     * @param {number} length
+     * @param {string} name
      */
-    constructor(mat, length) {
+    constructor(mat, length, name) {
         /** @type {Mat4x4} */
         this.mat = mat;
         /**
@@ -532,11 +533,19 @@ class Bone {
          */
         this.animMat = null;
         /** @type {number} */
-        this.length = length !== undefined ? length : 1.0;
-        /** children attached to the root of the bone @type {Renderable[]} */
+        this.length = length;
+        /**
+         * children attached to the root of the bone
+         * @type {Renderable[]}
+         */
         this.headChildren = [];
-        /** children attached to the end of the bone @type {Renderable[]} */
+        /**
+         * children attached to the end of the bone
+         * @type {Renderable[]}
+         */
         this.tailChildren = [];
+        /** @type {string} */
+        this.name = name;
     }
 
     resetAnimMatsRecursive() {
@@ -575,10 +584,10 @@ class Bone {
         //     [0, 0, 0],
         //     Vec.UP.mul(this.length).xyz(), // TODO should do this with a matrix & a global mesh for bones instead
         // ];
-        const drawBones = !false; // draw bones? // TODO should add a better way to toggle this
+        // const drawBones = !false; // draw bones? // TODO should add a better way to toggle this
         let baseMat = this.mat;
         if(this.animMat !== null) baseMat = baseMat.matmul(this.animMat);
-        if(drawBones) {
+        if(showBones) {
             const showBoneMat = mat.matmul(baseMat.scale(this.length, this.length, this.length));
             gl.bufferData(gl.ARRAY_BUFFER, Bone.BONE_DISPLAY_POINTS, gl.STATIC_DRAW);
             gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);

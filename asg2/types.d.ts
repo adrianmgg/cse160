@@ -35,4 +35,5 @@ export type HasKeyOfType<K extends string, T> = {
 
 export interface Animator {
     exec(t: number): void;
+    onActivate(): void;
 }

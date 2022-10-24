@@ -1,41 +1,5 @@
 
-// (was 'stamp' | 'brush' but i removed brush since i didnt have time to implement it)
-/** @typedef {'stamp'} PaintMode */
-/** @typedef {'ngon'} StampMode */
-/** @typedef {[number, number, number]} Color */
 
-const paintProgramOptions = {
-	/** @type {PaintMode} */
-	mode: 'stamp',
-	stampOptions: {
-		/** @type {StampMode} */
-		mode: 'ngon',
-		/** @type {number} */
-		sides: 3,
-		/** @type {number} */
-		angle: 0,
-		/** @type {Color} */
-		color: [0, 0, 0],
-		/** @type {number} */
-		alpha: 1,
-		/** @type {number} */
-		size: 0,
-	},
-};
-
-function setByPath(target, path, value) {
-	let cur = target;
-	for(let i = 0; i < path.length - 1; i++) {
-		cur = cur[path[i]];
-	}
-	cur[path[path.length - 1]] = value;
-}
-
-const uiContainer = document.getElementById('ui_container');
-
-function onSettingsChanged() {
-	uiContainer.dataset.mode = paintProgramOptions.mode;
-}
 
 /**
  * @param {string} s 

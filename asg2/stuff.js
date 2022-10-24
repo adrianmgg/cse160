@@ -85,6 +85,16 @@ class Mat4x4 {
         return this;
     }
 
+    /** @returns {Mat4x4} */
+    identityInPlace() {
+        return this.setInPlace(
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1,
+        );
+    }
+
     /**
      * @param {Mat4x4} other
      * @returns {Mat4x4}
@@ -261,6 +271,60 @@ class Mat4x4 {
             0, 0, 1, 0,
             0, 0, 0, 1,
         );
+    }
+
+    /** @param {number} tx @param {number} ty @param {number} tz @returns {Mat4x4} */
+    static rotateXYZ(tx, ty, tz) {
+        // source: based on https://github.com/blender/blender/blob/594f47ecd2d5367ca936cf6fc6ec8168c2b360d0/source/blender/blenlib/intern/math_rotation.c#L1648-L1686
+        // TODO verify that i've got the axes and indices correct here
+        const ci = Math.cos(tx);
+        const cj = Math.cos(ty);
+        const ch = Math.cos(tz);
+        const si = Math.sin(tx);
+        const sj = Math.sin(ty);
+        const sh = Math.sin(tz);
+        const cc = ci * ch;
+        const cs = ci * sh;
+        const sc = si * ch;
+        const ss = si * sh;
+        return Mat4x4.of(
+            cj * ch      , cj * sh     ,  -sj    ,  0,
+            sj * sc - cs , sj * ss + cc,  cj * si,  0,
+            sj * cc + ss , sj * cs - sc,  cj * ci,  0,
+            0            , 0           ,  0      ,  1,
+        );
+    }
+
+    /**
+     * @param {number} posX
+     * @param {number} posY
+     * @param {number} posZ
+     * @param {number} thetaX
+     * @param {number} thetaY
+     * @param {number} thetaZ
+     * @param {number} scaleX
+     * @param {number} scaleY
+     * @param {number} scaleZ
+     * @returns {Mat4x4}
+     */
+    static locRotScale(posX, posY, posZ, thetaX, thetaY, thetaZ, scaleX, scaleY, scaleZ) {
+        // source: based on https://github.com/blender/blender/blob/blender-v3.0-release/source/blender/python/mathutils/mathutils_Matrix.c#L989-L1068
+        const m = Mat4x4.rotateXYZ(thetaX, thetaY, thetaZ);
+        // scale mat
+        m.data[0 + (0 * 4)] *= scaleX;
+        m.data[0 + (1 * 4)] *= scaleX;
+        m.data[0 + (2 * 4)] *= scaleX;
+        m.data[1 + (0 * 4)] *= scaleY;
+        m.data[1 + (1 * 4)] *= scaleY;
+        m.data[1 + (2 * 4)] *= scaleY;
+        m.data[2 + (0 * 4)] *= scaleZ;
+        m.data[2 + (1 * 4)] *= scaleZ;
+        m.data[2 + (2 * 4)] *= scaleZ;
+        // copy location into mat
+        m.data[0 + (3 * 4)] = posX;
+        m.data[1 + (3 * 4)] = posY;
+        m.data[2 + (3 * 4)] = posZ;
+        return m;
     }
 }
 
@@ -473,6 +537,16 @@ class Bone {
         this.headChildren = [];
         /** children attached to the end of the bone @type {Renderable[]} */
         this.tailChildren = [];
+    }
+
+    resetAnimMatsRecursive() {
+        if(this.animMat !== null) this.animMat.identityInPlace();
+        for(const child of this.headChildren) {
+            if(child instanceof Bone) child.resetAnimMatsRecursive();
+        }
+        for(const child of this.tailChildren) {
+            if(child instanceof Bone) child.resetAnimMatsRecursive();
+        }
     }
 
     // TODO maybe add a LINES option for meshes? or smth like that

@@ -1,10 +1,21 @@
 
-#stamp_options, #brush_options {
-    display: none;
+body {
+    font-family: monospace;
 }
 
-   ui_container[data-mode="stamp"] > #stamp_options
- , ui_container[data-mode="brush"] > #brush_options
-{
-    display: unset;
+figure {
+    border: 1px darkgray solid;
+    /* display: flex; */
+    /* flex-flow: column; */
+    /* margin: auto; */
+    margin: 0.5em;
 }
+
+figcaption {
+    background-color: #222;
+    color: #ccc;
+    padding: .3em;
+    /* text-align: center; */
+}
+
+

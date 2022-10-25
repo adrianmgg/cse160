@@ -39,7 +39,7 @@ type MyProgramInfo = {
 };
 
 async function setupShaders(gl: WebGLRenderingContext): Promise<MyProgramInfo> {
-    const program = await loadProgramFromFiles(gl, 'shaders/vertex.glsl', 'shaders/fragment.glsl');
+    const program = await loadProgramFromFiles(gl, 'shaders/vertex.vert', 'shaders/fragment.frag');
     return {
         program: program,
         vars: getProgramVarLocations(gl, program, ['a_Position' as const], ['u_FragColor' as const]),

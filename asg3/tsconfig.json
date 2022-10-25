@@ -18,6 +18,7 @@
         "noUncheckedIndexedAccess": true,
         // "noUnusedLocals": true,
         // "noUnusedParameters": true,
+        "noErrorTruncation": true,
     },
     "watchOptions": {
         "excludeDirectories": ["**/node_modules"]

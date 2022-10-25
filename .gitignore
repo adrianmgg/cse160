@@ -1,2 +1,6 @@
 
 /**/*.blend1
+
+/**/node_modules/**/*
+
+/asg3/build/**/*

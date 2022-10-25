@@ -1,0 +1,25 @@
+{
+    "include": ["ts/**/*"],
+    "compilerOptions": {
+        "target": "ES2019",
+        // moduleResolution
+        "module": "es6",
+        "outDir": "build",
+        "incremental": true,
+        "sourceMap": true,
+        "strict": true,
+        "allowUnreachableCode": false,
+        "allowUnusedLabels": false,
+        "exactOptionalPropertyTypes": true, // or maybe not?
+        "noFallthroughCasesInSwitch": true, // or maybe not?
+        "noImplicitOverride": true,
+        "noImplicitReturns": true,
+        "noPropertyAccessFromIndexSignature": true, // or maybe not?
+        "noUncheckedIndexedAccess": true,
+        // "noUnusedLocals": true,
+        // "noUnusedParameters": true,
+    },
+    "watchOptions": {
+        "excludeDirectories": ["**/node_modules"]
+    }
+}

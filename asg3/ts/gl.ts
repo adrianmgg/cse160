@@ -47,21 +47,44 @@ export async function loadShaderFromFile(gl: WebGLRenderingContext, type: GLenum
 }
 
 export type ProgramVarLocations<
-    Attribs extends string[],
-    Uniforms extends string[],
+    Attribs extends readonly string[],
+    Uniforms extends readonly string[],
 > = {
-    uniformLocations: {
-        [K in Uniforms[number]]: WebGLUniformLocation | null;
-    };
-    attribLocations: {
-        /** vanilla WebGL uses -1 to indicate errors, I transform those to nulls so failing to check them can be brought up by the type checker */
-        [K in Attribs[number]]: GLint | null;
-    };
+    uniformLocations: Record<Uniforms[number], WebGLUniformLocation | null>;
+    attribLocations: Record<Attribs[number], GLint | null>;
 }
 
+/**
+ * helper for getting multiple attribute/uniform locations from a program
+ * 
+ * note that while WebGL uses `-1` to indicate when an attribute wasn't found, this function instead
+ * represents them with null. (this both to stay consistent with how the uniforms behave, as well as
+ * to facilitate better type checking)
+ * 
+ * if you're using this from typescript, consider adding a const assertion to the attribute name and
+ * uniform name lists
+ * ```typescript
+ * // with no const assertion,
+ * getProgramVarLocations(gl, program, ['foo', 'bar'], ['baz']);
+ * // the return type will be this
+ * {
+ *     uniformLocations: Record<string, WebGLUniformLocation | null>;
+ *     attribLocations: Record<string, number | null>;
+ * }
+ * ```
+ * ```typescript
+ * // but with const assertions,
+ * getProgramVarLocations(gl, program, ['foo', 'bar'] as const, ['baz'] as const);
+ * // the return type will be this
+ * {
+ *     uniformLocations: Record<"baz", WebGLUniformLocation | null>;
+ *     attribLocations: Record<"foo" | "bar", number | null>;
+ * }
+ * ```
+ */
 export function getProgramVarLocations<
-    Attribs extends string[],
-    Uniforms extends string[],
+    Attribs extends readonly string[],
+    Uniforms extends readonly string[],
 >(gl: WebGLRenderingContext, program: WebGLProgram, attribNames: Attribs, uniformNames: Uniforms): ProgramVarLocations<Attribs, Uniforms> {
     const attribLocations: Record<string, GLint | null> = {};
     const uniformLocations: Record<string, WebGLUniformLocation | null> = {};

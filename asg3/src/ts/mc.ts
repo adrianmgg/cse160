@@ -25,7 +25,8 @@ export class MCWorld {
         const db = await idbOpen(worldName, MC_WORLD_IDB_VERSION, this.upgradeWorldDB);
         const world = new MCWorld(db);
         const spawnChunk = await world.loadChunk(0, 0);
-        // world.unloadChunk(0, 0);
+        spawnChunk.setBlock(0, 0, 20, Block.GRASS);
+        await world.unloadChunk(0, 0);
         // const chunkB = await world.getOrCreateChunk(0, 1);
         // chunkA.vChunks[0] = VChunk.newVChunk();
         // world.saveChunk(chunkA);
@@ -45,8 +46,9 @@ export class MCWorld {
     }
 
     async unloadChunk(chunkX: number, chunkY: number): Promise<void> {
-        const chunk = await this.dbGetChunk(chunkX, chunkY);
-        if(chunk === null) return;
+        const chunk = this.chunks.get(chunkX, chunkY);
+        if(chunk === undefined) return;
+        console.log(`unloading chunk at ${chunkX},${chunkY}`);
         await this.dbSaveChunk(chunk);
         this.chunks.del(chunkX, chunkY);
     }
@@ -71,7 +73,7 @@ export class MCWorld {
         await idbRequest2Promise(
             this.db.transaction('chunks', 'readwrite')
                 .objectStore('chunks')
-                .add(newChunk)
+                .add(newChunk.toDB())
         );
         return newChunk;
     }
@@ -81,7 +83,7 @@ export class MCWorld {
         await idbRequest2Promise(
             this.db.transaction('chunks', 'readwrite')
                 .objectStore('chunks')
-                .put(chunk)
+                .put(chunk.toDB())
         );
     }
 
@@ -97,10 +99,8 @@ export class MCWorld {
 type DBChunkData = {
     chunkPos: [number, number];
     vChunks: NTupleOf<DBVChunkData | null, 16>;
-}
-type DBVChunkData = {
-    blockData: Uint8Array;
 };
+type DBVChunkData = Uint8Array;
 
 export class Chunk {
     readonly chunkPos: Readonly<[number, number]>;
@@ -127,9 +127,28 @@ export class Chunk {
         vc.setBlock(x, y, z - (vcZ * 16), block);
     }
 
+    fillArea(minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number, block: Block) {
+        debugAssert(0 <= minX && minX < 16, 'fillArea() minX out of range');
+        debugAssert(0 <= minY && minY < 16, 'fillArea() minY out of range');
+        debugAssert(0 <= minZ && minZ < 16, 'fillArea() minZ out of range');
+        debugAssert(0 <= maxX && maxX < 16, 'fillArea() maxX out of range');
+        debugAssert(0 <= maxY && maxY < 16, 'fillArea() maxY out of range');
+        debugAssert(0 <= maxZ && maxZ < 16, 'fillArea() maxZ out of range');
+        for(let x = minX; x <= maxX; x++) {
+            for(let y = minY; y <= maxY; y++) {
+                for(let z = minZ; z <= maxZ; z++) {
+                    this.setBlock(x, y, z, block);
+                }
+            }
+        }
+    }
+
     private async doWorldgen(): Promise<void> {
         console.log(`running worldgen for chunk ${this.chunkPos}`);
-        this.setBlock(0, 0, 0, Block.STONE);
+        this.fillArea(0, 0, 0, 15, 15, 0, Block.BEDROCK);
+        this.fillArea(0, 0, 1, 15, 15, 30, Block.STONE);
+        this.fillArea(0, 0, 31, 15, 15, 33, Block.DIRT);
+        this.fillArea(0, 0, 34, 15, 15, 34, Block.GRASS);
     }
 
     static async newChunk(chunkX: number, chunkY: number): Promise<Chunk> {
@@ -139,7 +158,14 @@ export class Chunk {
     }
 
     static fromDB(data: DBChunkData): Chunk {
-        return new Chunk(data.chunkPos[0], data.chunkPos[1], data.vChunks.map(vc => vc === null ? null : null) as NTupleOf<VChunk | null, 16>);
+        return new Chunk(data.chunkPos[0], data.chunkPos[1], data.vChunks.map(vc => vc === null ? null : VChunk.fromDB(vc)) as NTupleOf<VChunk | null, 16>);
+    }
+
+    toDB(): DBChunkData {
+        return {
+            chunkPos: [...this.chunkPos],
+            vChunks: this.vChunks.map(v => v === null ? null : v.toDB()) as NTupleOf<DBVChunkData | null, 16>,
+        };
     }
 }
 
@@ -165,6 +191,10 @@ export class VChunk {
     }
 
     static fromDB(data: DBVChunkData): VChunk {
-        return new VChunk(data.blockData);
+        return new VChunk(data);
+    }
+
+    toDB(): DBVChunkData {
+        return this.blockData;
     }
 }

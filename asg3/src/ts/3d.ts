@@ -1,49 +1,38 @@
-// @ts-check
-'use strict';
+import { debugAssert, NTupleOf } from "./util";
 
-// import some types from our typescript file (can't declare typescript interface in jsdoc comments)
-/** @typedef { import('./types').Renderable } Renderable */
+export interface Renderable {
+    render(gl: WebGLRenderingContext, mat: Mat4x4): void;
+}
 
 class Mat4x4 {
-    /** @private */
-    static _IDENTITY = Mat4x4.of(
+    // intersecting it with the fixed length tuple lets typescript know that any indices [0, 16) are
+    // always going to return a number & therefore don't need undefined checks everywhere
+    data: Float32Array & NTupleOf<number, 16>;
+
+    private static _IDENTITY = Mat4x4.of(
         1, 0, 0, 0,
         0, 1, 0, 0,
         0, 0, 1, 0,
         0, 0, 0, 1,
     );
 
-    /**
-     * @param {Float32Array} data matrix's data, IN COLUMN-MAJOR ORDER
-     * @private
-     */
-    constructor(data) {
-        /** @type {Float32Array} */
-        this.data = data;
-        // this.data = new Float32Array(source);
+    /** @param data matrix's data, IN COLUMN-MAJOR ORDER */
+    private constructor(data: Float32Array) {
+        this.data = data as Float32Array & NTupleOf<number, 16>;
     }
 
-    /**
-     * @param {number} row
-     * @param {number} col
-     * @returns {number}
-     */
-    get(row, col) {
-        return this.data[row + (col * 4)];
+    get(row: number, col: number): number {
+        // just cast away the index check. probably shouldn't do that
+        return this.data[row + (col * 4)] as number;
     }
 
-    /** @returns {Mat4x4} */
-    clone() {
+    clone(): Mat4x4 {
         const newData = new Float32Array(16);
         newData.set(this.data);
         return new Mat4x4(newData);
     }
 
-    /**
-     * @param {(value: number, row: number, col: number, mat: Mat4x4) => number} f
-     * @returns {Mat4x4}
-     */
-     map(f) {
+     map(f: (value: number, row: number, col: number, mat: Mat4x4) => number): Mat4x4 {
         return new Mat4x4(this.data.map((value, i) => {
             const row = i % 4;
             const col = (i - row) >> 2; // equivalent to floor((i - row) / 4)
@@ -51,21 +40,12 @@ class Mat4x4 {
         }));
     }
 
-    /**
-     * construct new matrix from ROW-MAJOR values
-     * @param  {[number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]} a
-     * @returns {Mat4x4}
-     */
-    static of(...a) {
+    /** construct new matrix from ROW-MAJOR values */
+    static of(...a: NTupleOf<number, 16>): Mat4x4 {
         return new Mat4x4(new Float32Array([a[0], a[4], a[8], a[12], a[1], a[5], a[9], a[13], a[2], a[6], a[10], a[14], a[3], a[7], a[11], a[15]]));
     }
 
-    /**
-     * construct new matrix from ROW-MAJOR values
-     * @param  {[number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]} a
-     * @returns {Mat4x4}
-     */
-    setInPlace(...a) {
+    setInPlace(...a: NTupleOf<number, 16>): Mat4x4 {
         this.data[0] = a[0];
         this.data[1] = a[4];
         this.data[2] = a[8];
@@ -85,8 +65,7 @@ class Mat4x4 {
         return this;
     }
 
-    /** @returns {Mat4x4} */
-    identityInPlace() {
+    identityInPlace(): Mat4x4 {
         return this.setInPlace(
             1, 0, 0, 0,
             0, 1, 0, 0,
@@ -95,11 +74,7 @@ class Mat4x4 {
         );
     }
 
-    /**
-     * @param {Mat4x4} other
-     * @returns {Mat4x4}
-     */
-     matmulInPlace(other) {
+     matmulInPlace(other: Mat4x4): Mat4x4 {
         const a = this.data, b = other.data;
         return this.setInPlace(
             a[ 0]*b[ 0]+a[ 4]*b[ 1]+a[ 8]*b[ 2]+a[12]*b[ 3], a[ 0]*b[ 4]+a[ 4]*b[ 5]+a[ 8]*b[ 6]+a[12]*b[ 7], a[ 0]*b[ 8]+a[ 4]*b[ 9]+a[ 8]*b[10]+a[12]*b[11], a[ 0]*b[12]+a[ 4]*b[13]+a[ 8]*b[14]+a[12]*b[15],
@@ -109,33 +84,25 @@ class Mat4x4 {
         );
     }
 
-    /**
-     * @param {Mat4x4} other
-     * @returns {Mat4x4}
-     */
-    matmul(other) {
+    matmul(other: Mat4x4): Mat4x4 {
         return this.clone().matmulInPlace(other);
     }
 
-    /** @param {number} a @returns {Mat4x4} */
-    componentwiseAdd(a) {
+    // TODO probably shouldn't do these with map
+    componentwiseAdd(a: number): Mat4x4 {
         return new Mat4x4(this.data.map(v => v + a));
     }
-    /** @param {number} a @returns {Mat4x4} */
-    componentwiseSub(a) {
+    componentwiseSub(a: number): Mat4x4 {
         return new Mat4x4(this.data.map(v => v - a));
     }
-    /** @param {number} a @returns {Mat4x4} */
-    componentwiseMul(a) {
+    componentwiseMul(a: number): Mat4x4 {
         return new Mat4x4(this.data.map(v => v * a));
     }
-    /** @param {number} a @returns {Mat4x4} */
-    componentwiseDiv(a) {
+    componentwiseDiv(a: number): Mat4x4 {
         return new Mat4x4(this.data.map(v => v / a));
     }
 
-    /** @returns {Mat4x4} */
-    cofactorMatrix() {
+    cofactorMatrix(): Mat4x4 {
         // "Each element of a square matrix has a cofactor which is the
         //  determinant of a matrix with one fewer row and column possibly
         //  multiplied by minus one."
@@ -150,8 +117,7 @@ class Mat4x4 {
         );
     }
 
-    /** @returns {Mat4x4} */
-    transpose() {
+    transpose(): Mat4x4 {
         // "The transpose AT of a matrix A has the same numbers but the rows are switched with the columns."
         return Mat4x4.of(
             this.get(0,0), this.get(1,0), this.get(2,0), this.get(3,0),
@@ -161,8 +127,7 @@ class Mat4x4 {
         );
     }
 
-    /** @returns {Mat4x4} */
-    inverse() {
+    inverse(): Mat4x4 {
         const cofactors = this.cofactorMatrix();
         const adjoint = cofactors.transpose();
         // "The determinant of a matrix is found by taking the sum of products
@@ -173,38 +138,22 @@ class Mat4x4 {
         return adjoint.componentwiseDiv(determinant);
     }
 
-    /** @param {number} x @param {number} y @param {number} z @returns {Mat4x4} */
-    translate(x, y, z) { return this.matmul(Mat4x4.translate(x, y, z)); }
-    /** @param {number} x @param {number} y @param {number} z @returns {Mat4x4} */
-    translateInPlace(x, y, z) { return this.matmulInPlace(Mat4x4.translate(x, y, z)); }
-    /** @param {number} x @param {number} y @param {number} z @returns {Mat4x4} */
-    scale(x, y, z) { return this.matmul(Mat4x4.scale(x, y, z)); }
-    /** @param {number} x @param {number} y @param {number} z @returns {Mat4x4} */
-    scaleInPlace(x, y, z) { return this.matmulInPlace(Mat4x4.scale(x, y, z)); }
-    /** @param {number} theta @returns {Mat4x4} */
-    rotateX(theta) { return this.matmul(Mat4x4.rotateX(theta)); }
-    /** @param {number} theta @returns {Mat4x4} */
-    rotateXInPlace(theta) { return this.matmulInPlace(Mat4x4.rotateX(theta)); }
-    /** @param {number} theta @returns {Mat4x4} */
-    rotateY(theta) { return this.matmul(Mat4x4.rotateY(theta)); }
-    /** @param {number} theta @returns {Mat4x4} */
-    rotateYInPlace(theta) { return this.matmulInPlace(Mat4x4.rotateY(theta)); }
-    /** @param {number} theta @returns {Mat4x4} */
-    rotateZ(theta) { return this.matmul(Mat4x4.rotateZ(theta)); }
-    /** @param {number} theta @returns {Mat4x4} */
-    rotateZInPlace(theta) { return this.matmulInPlace(Mat4x4.rotateZ(theta)); }
+    translate(x: number, y: number, z: number): Mat4x4 { return this.matmul(Mat4x4.translate(x, y, z)); }
+    translateInPlace(x: number, y: number, z: number): Mat4x4 { return this.matmulInPlace(Mat4x4.translate(x, y, z)); }
+    scale(x: number, y: number, z: number): Mat4x4 { return this.matmul(Mat4x4.scale(x, y, z)); }
+    scaleInPlace(x: number, y: number, z: number): Mat4x4 { return this.matmulInPlace(Mat4x4.scale(x, y, z)); }
+    rotateX(theta: number): Mat4x4 { return this.matmul(Mat4x4.rotateX(theta)); }
+    rotateXInPlace(theta: number): Mat4x4 { return this.matmulInPlace(Mat4x4.rotateX(theta)); }
+    rotateY(theta: number): Mat4x4 { return this.matmul(Mat4x4.rotateY(theta)); }
+    rotateYInPlace(theta: number): Mat4x4 { return this.matmulInPlace(Mat4x4.rotateY(theta)); }
+    rotateZ(theta: number): Mat4x4 { return this.matmul(Mat4x4.rotateZ(theta)); }
+    rotateZInPlace(theta: number): Mat4x4 { return this.matmulInPlace(Mat4x4.rotateZ(theta)); }
 
-    /** @returns {Mat4x4} */
-    static identity() {
+    // TODO either we can have a single instance we return, OR we can have in-place operations. not both
+    static identity(): Mat4x4 {
         return Mat4x4._IDENTITY;
     }
-    /**
-     * @param {number} x
-     * @param {number} y
-     * @param {number} z
-     * @returns {Mat4x4}
-     */
-    static translate(x, y, z) {
+    static translate(x: number, y: number, z: number): Mat4x4 {
         return Mat4x4.of(
             1, 0, 0, x,
             0, 1, 0, y,
@@ -212,11 +161,9 @@ class Mat4x4 {
             0, 0, 0, 1,
         );
     }
-    /**
-     * @param {[number] | [number, number, number]} args
-     * @returns {Mat4x4}
-     */
-    static scale(...args) {
+    static scale(n: number): Mat4x4;
+    static scale(x: number, y: number, z: number): Mat4x4;
+    static scale(...args: [number] | [number, number, number]): Mat4x4 {
         let x, y, z;
         if(args.length === 3) {
             [x, y, z] = args;
@@ -230,11 +177,7 @@ class Mat4x4 {
             0, 0, 0, 1,
         );
     }
-    /**
-     * @param {number} theta
-     * @returns {Mat4x4}
-     */
-    static rotateX(theta) {
+    static rotateX(theta: number): Mat4x4 {
         const sin = Math.sin(theta);
         const cos = Math.cos(theta);
         return Mat4x4.of(
@@ -244,11 +187,7 @@ class Mat4x4 {
             0, 0, 0, 1,
         );
     }
-    /**
-     * @param {number} theta
-     * @returns {Mat4x4}
-     */
-    static rotateY(theta) {
+    static rotateY(theta: number): Mat4x4 {
         const sin = Math.sin(theta);
         const cos = Math.cos(theta);
         return Mat4x4.of(
@@ -258,11 +197,7 @@ class Mat4x4 {
             0, 0, 0, 1,
         );
     }
-    /**
-     * @param {number} theta
-     * @returns {Mat4x4}
-     */
-    static rotateZ(theta) {
+    static rotateZ(theta: number): Mat4x4 {
         const sin = Math.sin(theta);
         const cos = Math.cos(theta);
         return Mat4x4.of(
@@ -273,8 +208,7 @@ class Mat4x4 {
         );
     }
 
-    /** @param {number} tx @param {number} ty @param {number} tz @returns {Mat4x4} */
-    static rotateXYZ(tx, ty, tz) {
+    static rotateXYZ(tx: number, ty: number, tz: number): Mat4x4 {
         // source: based on https://github.com/blender/blender/blob/594f47ecd2d5367ca936cf6fc6ec8168c2b360d0/source/blender/blenlib/intern/math_rotation.c#L1648-L1686
         const ci = Math.cos(tx);
         const cj = Math.cos(ty);
@@ -294,19 +228,7 @@ class Mat4x4 {
         );
     }
 
-    /**
-     * @param {number} posX
-     * @param {number} posY
-     * @param {number} posZ
-     * @param {number} thetaX
-     * @param {number} thetaY
-     * @param {number} thetaZ
-     * @param {number} scaleX
-     * @param {number} scaleY
-     * @param {number} scaleZ
-     * @returns {Mat4x4}
-     */
-    static locRotScale(posX, posY, posZ, thetaX, thetaY, thetaZ, scaleX, scaleY, scaleZ) {
+    static locRotScale(posX: number, posY: number, posZ: number, thetaX: number, thetaY: number, thetaZ: number, scaleX: number, scaleY: number, scaleZ: number): Mat4x4 {
         // source: based on https://github.com/blender/blender/blob/blender-v3.0-release/source/blender/python/mathutils/mathutils_Matrix.c#L989-L1068
         const m = Mat4x4.rotateXYZ(thetaX, thetaY, thetaZ);
         // scale mat
@@ -328,100 +250,80 @@ class Mat4x4 {
 }
 
 
-
-
 class Vec {
-    /**
-     * @param {number} x
-     * @param {number} y
-     * @param {number} z
-     * @private
-     */
-    constructor(x, y, z) {
-        /** @type {number} */
+    x: number;
+    y: number;
+    z: number;
+
+    private constructor(x: number, y: number, z: number) {
         this.x = x;
-        /** @type {number} */
         this.y = y;
-        /** @type {number} */
         this.z = z;
     }
 
-    /** @returns {Vec} */
-    clone() { return new Vec(this.x, this.y, this.z); }
+    clone(): Vec {
+        return new Vec(this.x, this.y, this.z);
+    }
 
     // tbh this doesn't really need the private ctor + public static .of() split, but might as well be consistent with the others like Mat4 i guess
-    /**
-     * @param {number} x
-     * @param {number} y
-     * @param {number} z
-     */
-    static of(x, y, z) {
+    static of(x: number, y: number, z: number): Vec {
         return new Vec(x, y, z);
     }
 
-    /** @param {number} r @param {number} theta @param {number} phi @returns {Vec} */
-    static fromSpherical(r, theta, phi) {
+    static fromSpherical(r: number, theta: number, phi: number): Vec {
         const sinTheta = Math.sin(theta);
         return Vec.of(r * sinTheta * Math.cos(phi), r * sinTheta * Math.sin(phi), r * Math.cos(theta));
     }
-    /** @param {number} r @param {number} theta @param {number} y @returns {Vec} */
-    static fromCylindrical(r, theta, y = 0) {
+    static fromCylindrical(r: number, theta: number, y = 0): Vec {
         return Vec.of(r * Math.cos(theta), y, r * Math.sin(theta));
     }
 
-    magnitude() {
+    magnitude(): number {
         return Math.sqrt(this.x*this.x + this.y*this.y + this.z*this.z);
     }
 
-    /** @param {Vec | number} a @returns {Vec} */
-    add(a) {
+    add(n: number): Vec;
+    add(v: Vec): Vec;
+    add(a: Vec | number): Vec {
         if(typeof a === 'number') return Vec.of(this.x + a, this.y + a, this.z + a);
         else return Vec.of(this.x + a.x, this.y + a.y, this.z + a.z);
     }
-    /** @param {Vec} a @param {Vec | number} b @returns {Vec} */
-    static add(a, b) { return a.add(b); }
-    /** @param {Vec | number} a @returns {Vec} */
-    sub(a) {
+    sub(n: number): Vec;
+    sub(v: Vec): Vec;
+    sub(a: Vec | number): Vec {
         if(typeof a === 'number') return Vec.of(this.x - a, this.y - a, this.z - a);
         else return Vec.of(this.x - a.x, this.y - a.y, this.z - a.z);
     }
-    /** @param {Vec} a @param {Vec | number} b @returns {Vec} */
-    static sub(a, b) { return a.sub(b); }
-    /** @param {Vec | number} a @returns {Vec} */
-    mul(a) {
+    mul(n: number): Vec;
+    mul(v: Vec): Vec;
+    mul(a: Vec | number): Vec {
         if(typeof a === 'number') return Vec.of(this.x * a, this.y * a, this.z * a);
         else return Vec.of(this.x * a.x, this.y * a.y, this.z * a.z);
     }
-    /** @param {Vec} a @param {Vec | number} b @returns {Vec} */
-    static mul(a, b) { return a.mul(b); }
-    /** @param {Vec | number} a @returns {Vec} */
-    div(a) {
+    div(n: number): Vec;
+    div(v: Vec): Vec;
+    div(a: Vec | number): Vec {
         if(typeof a === 'number') return Vec.of(this.x / a, this.y / a, this.z / a);
         else return Vec.of(this.x / a.x, this.y / a.y, this.z / a.z);
     }
-    /** @param {Vec} a @param {Vec | number} b @returns {Vec} */
-    static div(a, b) { return a.div(b); }
 
-    /** @param {Vec} a @param {Vec} b @returns {Vec} */
-    static cross(a, b) { return Vec.of(-a.z*b.y + a.y*b.z, a.z*b.x - a.x*b.z, -a.y*b.x + a.x*b.y); }
-    /** @param {Vec} a @returns {Vec} */
-    cross(a) { return Vec.cross(this, a); }
+    cross(b: Vec): Vec {
+        return Vec.of(-this.z*b.y + this.y*b.z, this.z*b.x - this.x*b.z, -this.y*b.x + this.x*b.y);
+    }
 
-    /** @returns {[number, number, number]} */
-    xyz() {
+    xyz(): NTupleOf<number, 3> {
         return [this.x, this.y, this.z];
     }
 
-    /** @param {Mat4x4} mat @returns {Vec} */
-    transformInPlace(mat) {
+    // TODO again, static instances or in-place modification. can't have both
+    transformInPlace(mat: Mat4x4): Vec {
         // TODO vecs should probably have a .w?
         this.x = mat.get(0, 0) * this.x + mat.get(0, 1) * this.y + mat.get(0, 2) * this.z + mat.get(0, 3) * /*this.w*/1;
         this.y = mat.get(1, 0) * this.x + mat.get(1, 1) * this.y + mat.get(1, 2) * this.z + mat.get(1, 3) * /*this.w*/1;
         this.z = mat.get(2, 0) * this.x + mat.get(2, 1) * this.y + mat.get(2, 2) * this.z + mat.get(2, 3) * /*this.w*/1;
         return this;
     }
-    /** @param {Mat4x4} mat @returns {Vec} */
-    transform(mat) { return this.clone().transformInPlace(mat); }
+    transform(mat: Mat4x4): Vec { return this.clone().transformInPlace(mat); }
 
     static ZERO = Vec.of(0, 0, 0);
     static ONE = Vec.of(1, 1, 1);
@@ -436,31 +338,19 @@ class Vec {
 
 
 class Camera {
-    constructor() {
-        /** @type {Vec} */
-        this.pos = Vec.ZERO;
-        /** @type {Vec} */
-        this.gaze = Vec.FORWARDS;
-        /** @type {Vec} */
-        this.up = Vec.UP;
+    pos: Vec = Vec.ZERO;
+    gaze: Vec = Vec.FORWARDS;
+    up: Vec = Vec.UP;
+    nearPlane: number = 1e-2;
+    farPlane: number = 1e4;
+    fov: number = Math.PI / 2;
 
-        /** @type {number} */
-        this.nearPlane = 1e-2;
-        /** @type {number} */
-        this.farPlane = 1e4;
-        this.fov = Math.PI / 2;
-    }
-
-    /**
-     * point {@link Camera.gaze} towards the specified point
-     * @param {Vec} v 
-     */
-    gazeTowards(v) {
+    /** point {@link Camera.gaze} towards the specified point */
+    gazeTowards(v: Vec) {
         this.gaze = v.sub(this.pos);
     }
 
-    /** @private @returns {Mat4x4} */
-    cameraMat() {
+    private cameraMat(): Mat4x4 {
         const w = this.gaze.div(this.gaze.magnitude()).mul(-1);
         const up_cross_w = this.up.cross(w);
         const u = up_cross_w.div(up_cross_w.magnitude());
@@ -473,8 +363,7 @@ class Camera {
         ).translate(-this.pos.x, -this.pos.y, -this.pos.z);
     }
 
-    /** @private @returns {Mat4x4} */
-    perspectiveMat() {
+    private perspectiveMat(): Mat4x4 {
         const abs_n = Math.abs(this.nearPlane);
         const abs_f = Math.abs(this.farPlane);
         const topPlane = Math.tan(this.fov / 2) * abs_n;
@@ -491,9 +380,8 @@ class Camera {
             0, 0, -1, 0
         );
     }
-    
-    /** @private @returns {Mat4x4} */
-    viewportMat() {
+
+    private viewportMat(): Mat4x4 {
         // TODO hardcoding canvas dimensions for now, should be dynamic
         const canvasWidth = 400, canvasHeight = 400;
         // eqn 7.2
@@ -506,44 +394,29 @@ class Camera {
     }
 
     // 7.1.3 - The Camera Transformation
-    world2viewMat() {
+    world2viewMat(): Mat4x4 {
         // viewport mat not needed i guess?
         return this.perspectiveMat().matmul(this.cameraMat());
     }
 }
 
 
-
-/**
- * @implements {Renderable}
- */
-class Bone {
-    /**
-     * @param {Mat4x4} mat
-     * @param {number} length
-     * @param {string} name
-     */
-    constructor(mat, length, name) {
-        /** @type {Mat4x4} */
+class Bone implements Renderable {
+    mat: Mat4x4;
+    /** second matrix, for ease of animation */
+    animMat: Mat4x4 | null;
+    length: number;
+    /** children attached to the root of the bone */
+    headChildren: Renderable[];
+    /** children attached to the end of the bone */
+    tailChildren: Renderable[];
+    name: string;
+    constructor(mat: Mat4x4, length: number, name: string) {
         this.mat = mat;
-        /**
-         * second matrix, for ease of animation
-         * @type {Mat4x4 | null}
-         */
         this.animMat = null;
-        /** @type {number} */
         this.length = length;
-        /**
-         * children attached to the root of the bone
-         * @type {Renderable[]}
-         */
         this.headChildren = [];
-        /**
-         * children attached to the end of the bone
-         * @type {Renderable[]}
-         */
         this.tailChildren = [];
-        /** @type {string} */
         this.name = name;
     }
 
@@ -558,7 +431,7 @@ class Bone {
     }
 
     // TODO maybe add a LINES option for meshes? or smth like that
-    static BONE_DISPLAY_POINTS = new Float32Array([
+    private static BONE_DISPLAY_POINTS = new Float32Array([
         // simple view, just a line:
         // 0, 0, 0,
         // 0, 1, 0,
@@ -573,11 +446,8 @@ class Bone {
          .1, .1, -.1,    .1, .1,  .1,
     ]);
 
-    /**
-     * @param {WebGLRenderingContext} gl
-     * @param {Mat4x4} mat
-     */
-    render(gl, mat) {
+    // TODO finish porting
+    render(gl: WebGLRenderingContext, mat: Mat4x4) {
         let baseMat = this.mat;
         if(this.animMat !== null) baseMat = baseMat.matmul(this.animMat);
         if(showBones) {
@@ -607,12 +477,11 @@ class Bone {
 
 
 class Mesh {
-    /** @param {Float32Array | number[]} verts @param {Uint16Array | number[]} indices */
-    constructor(verts, indices) {
+    readonly verts: Float32Array;
+    readonly indices: Uint16Array;
+    constructor(verts: Float32Array | number[], indices: Uint16Array | number[]) {
         // these shouldn't be constructed very often so i'm not too worried about any minor performance hits from the instanceof stuff
-        /** @type {Float32Array} */
         this.verts = verts instanceof Float32Array ? verts : new Float32Array(verts);
-        /** @type {Uint16Array} */
         this.indices = indices instanceof Uint16Array ? indices : new Uint16Array(indices);
     }
     
@@ -668,8 +537,7 @@ class Mesh {
         Mesh.UNIT_ICOSPHERE.indices,
     );
 
-    /** @param {number} divisions @param {Vec} center @param {number} radius @param {number} length @param {boolean} cap @returns {Mesh} */
-    static cylinder(divisions, center, radius, length, cap) {
+    static cylinder(divisions: number, center: Vec, radius: number, length: number, cap: boolean): Mesh {
         const verts = new Float32Array(divisions * 2 * 3 + (cap ? 6 : 0)); // num divisions * 2 circles with that many divisions * 3 vals per vert
         for(let i = 0; i < divisions; i++) {
             const theta = (i / divisions) * Math.PI * 2;
@@ -712,40 +580,33 @@ class Mesh {
 }
 
 class Color {
-    /** @param {number} r @param {number} g @param {number} b @param {number} a */
-    constructor(r, g, b, a) {
-        /** @type {number} */
+    r: number;
+    g: number;
+    b: number;
+    a: number;
+    constructor(r: number, g: number, b: number, a: number) {
         this.r = r;
-        /** @type {number} */
         this.g = g;
-        /** @type {number} */
         this.b = b;
-        /** @type {number} */
         this.a = a;
     }
 
-    /** @param {number} hex @returns {Color} */
-    static fromRGBHex(hex) {
+    static fromRGBHex(hex: number): Color {
         return new Color((hex >> 16) / 255, ((hex >> 8) & 0xFF) / 255, (hex & 0xFF) / 255, 1.0);
     }
 }
 
-/**
- * @implements {Renderable}
- */
-class Model {
-    /** @param {Mesh} mesh @param {Mat4x4} [mat] @param {Color} [color] */
-    constructor(mesh, mat, color) {
-        /** @type {Mesh} */
+class Model implements Renderable {
+    mesh: Mesh;
+    mat: Mat4x4;
+    color: Color;
+    constructor(mesh: Mesh, mat?: Mat4x4, color?: Color) {
         this.mesh = mesh;
-        /** @type {Mat4x4} */
         this.mat = mat !== undefined ? mat : Mat4x4.identity();
-        /** @type {Color} */
         this.color = color !== undefined ? color : new Color(0, 0, 0, 1);
     }
 
-    /** @param {WebGLRenderingContext} gl @param {Mat4x4} mat */
-    render(gl, mat) {
+    render(gl: WebGLRenderingContext, mat:Mat4x4) {
         const newMat = mat.matmul(this.mat);
         gl.bufferData(gl.ARRAY_BUFFER, this.mesh.verts, gl.STATIC_DRAW);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.mesh.indices, gl.STATIC_DRAW);

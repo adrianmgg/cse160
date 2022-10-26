@@ -2,7 +2,7 @@
     "scripts": {
         "build": "npx tsc --build",
         "clean": "npx tsc --build --clean",
-        "watch": "npm run build && npx concurrently --names tsc,live-server \"npx tsc --watch --preserveWatchOutput\" \"npx live-server --open=index.html --watch=index.html,style.css,build,shaders --ignore=build/tsconfig.tsbuildinfo\""
+        "watch": "npm run build && npx concurrently --names tsc,live-server \"npx tsc --watch --preserveWatchOutput\" \"npx live-server --open=src/index.html --watch=src/index.html,src/style.css,src/js,src/shaders --ignore=src/js/tsconfig.tsbuildinfo\""
     },
     "devDependencies": {
         "concurrently": "^7.5.0",

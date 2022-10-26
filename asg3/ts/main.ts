@@ -13,9 +13,12 @@ async function main() {
     setupWebGL(gl);
     const programInfo = await setupShaders(gl);
     const buffersInfo = setupBuffers(gl, programInfo);
-    const stuff: MyGlStuff = {gl, programInfo, buffers: buffersInfo};
+    const glStuff: MyGlStuff = {gl, programInfo, buffers: buffersInfo};
     // setupUI();
     const world = await setupWorld();
+    // store these on the global scope. purely for easier debugging, our code shouldn't access them this way
+    // @ts-ignore
+    window.mcStuff = {glStuff, world};
     requestAnimationFrame(tick);
 }
 

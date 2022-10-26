@@ -19,6 +19,8 @@
         // "noUnusedLocals": true,
         // "noUnusedParameters": true,
         "noErrorTruncation": true,
+        // ==== emit options ====
+        "importsNotUsedAsValues": "error", // maybe?
     },
     "watchOptions": {
         "excludeDirectories": ["**/node_modules"]

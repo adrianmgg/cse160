@@ -7,6 +7,11 @@ export function assert(condition: boolean, message?: string): asserts condition 
     }
 }
 
+export function debugAssert(condition: boolean, message?: string): asserts condition {
+    // TODO have debug toggle. for now this is just a normal assertion
+    assert(condition, message);
+}
+
 // TODO give this a better name
 export function promiseResolveReject<T>(): [Promise<T>, (value: T | PromiseLike<T>) => void,  (reason?: any) => void] {
     let resolve: null | ((value: T | PromiseLike<T>) => void) = null;
@@ -22,3 +27,50 @@ export function promiseResolveReject<T>(): [Promise<T>, (value: T | PromiseLike<
 
 // source: https://stackoverflow.com/a/52490977/8762161
 export type NTupleOf<T, N extends number, R extends unknown[] = []> = R['length'] extends N ? R : NTupleOf<T, N, [T, ...R]>;
+
+export class Dict2D<
+    TKeyOuter extends keyof any,
+    TKeyInner extends keyof any,
+    // essentially just Exclude<any, undefined>, which doesn't actually work, so instead i'm using a
+    // a union of all the primitive types *except* undefined
+    TValue extends object | string | number | boolean | bigint | symbol | null,
+> implements Iterable<readonly [TValue, readonly [TKeyOuter, TKeyInner]]> {
+    private readonly data: {[K1 in TKeyOuter]?: {[K2 in TKeyInner]?: TValue}} = {};
+
+    public get(a: TKeyOuter, b: TKeyInner): TValue | undefined {
+        return this.data[a]?.[b];
+    }
+
+    private getOrCreateRow(a: TKeyOuter): {[K in TKeyInner]?: TValue} {
+        return this.data[a] ?? (this.data[a] = {});
+    }
+
+    public set(a: TKeyOuter, b: TKeyInner, v: TValue): void {
+        this.getOrCreateRow(a)[b] = v;
+    }
+
+    public del(a: TKeyOuter, b: TKeyInner): void {
+        const row = this.data[a];
+        if(row === undefined) return;
+        delete row[b];
+        // TODO delete column if it's empty?
+    }
+
+    public has(a: TKeyOuter, b: TKeyInner): boolean {
+        const row = this.data[a];
+        if(row === undefined) return false;
+        else return b in row;
+    }
+
+    *[Symbol.iterator](): Generator<readonly [TValue, readonly [TKeyOuter, TKeyInner]], void, unknown> {
+        for(const k1 in this.data) {
+            const row: {[K in TKeyInner]?: TValue} | undefined = this.data[k1 as TKeyOuter];
+            if(row === undefined) continue;
+            for(const k2 in row) {
+                const v: TValue | undefined = row[k2 as TKeyInner];
+                if(v === undefined) continue;
+                yield [v, [k1 as TKeyOuter, k2 as TKeyInner]] as const;
+            }
+        }
+    }
+}

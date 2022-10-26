@@ -1,11 +1,13 @@
+import { Camera } from './3d.js';
 import { getProgramVarLocations, loadProgramFromFiles, ProgramVarLocations } from './gl.js';
 import { MCWorld } from './mc.js';
 import { assert } from "./util.js";
 
-type MyGlStuff = {
+export type MyGlStuff = {
     gl: WebGLRenderingContext;
     programInfo: MyProgramInfo;
     buffers: MyBuffersInfo;
+    camera: Camera;
 }
 
 async function main() {
@@ -13,13 +15,14 @@ async function main() {
     setupWebGL(gl);
     const programInfo = await setupShaders(gl);
     const buffersInfo = setupBuffers(gl, programInfo);
-    const glStuff: MyGlStuff = {gl, programInfo, buffers: buffersInfo};
+    const camera = new Camera();
+    const glStuff: MyGlStuff = {gl, programInfo, buffers: buffersInfo, camera};
     // setupUI();
     const world = await setupWorld();
     // store these on the global scope. purely for easier debugging, our code shouldn't access them this way
-    // @ts-ignore
+    // @ts-expect-error
     window.mcStuff = {glStuff, world};
-    requestAnimationFrame(tick);
+    requestAnimationFrame(tick.bind(null, glStuff));
 }
 
 function initWebGL(): WebGLRenderingContext {
@@ -38,14 +41,14 @@ function setupWebGL(gl: WebGLRenderingContext) {
 
 type MyProgramInfo = {
     program: WebGLProgram;
-    vars: ProgramVarLocations<['a_Position'], ['u_FragColor']>;
+    vars: ProgramVarLocations<['a_Position'], ['u_FragColor', 'u_ModelMat']>;
 };
 
 async function setupShaders(gl: WebGLRenderingContext): Promise<MyProgramInfo> {
     const program = await loadProgramFromFiles(gl, 'shaders/vertex.vert', 'shaders/fragment.frag');
     return {
         program: program,
-        vars: getProgramVarLocations(gl, program, ['a_Position' as const], ['u_FragColor' as const]),
+        vars: getProgramVarLocations(gl, program, ['a_Position'] as const, ['u_FragColor', 'u_ModelMat'] as const),
     }
 }
 
@@ -72,8 +75,14 @@ async function setupWorld(): Promise<MCWorld> {
     return await MCWorld.openWorld('new world');
 }
 
-function tick(now: DOMHighResTimeStamp): void {
+function tick(stuff: MyGlStuff, now: DOMHighResTimeStamp): void {
+    clearCanvas(stuff);
+    requestAnimationFrame(tick.bind(null, stuff));
 }
 
 window.addEventListener('DOMContentLoaded', main);
 
+function clearCanvas({ gl }: MyGlStuff) {
+    gl.clearColor(.8, .8, .8, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+}

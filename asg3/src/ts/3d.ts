@@ -1,10 +1,11 @@
-import { debugAssert, NTupleOf } from "./util";
+import type { MyGlStuff } from "./main";
+import type { NTupleOf } from "./util";
 
 export interface Renderable {
-    render(gl: WebGLRenderingContext, mat: Mat4x4): void;
+    render(stuff: MyGlStuff, mat: Mat4x4): void;
 }
 
-class Mat4x4 {
+export class Mat4x4 {
     // intersecting it with the fixed length tuple lets typescript know that any indices [0, 16) are
     // always going to return a number & therefore don't need undefined checks everywhere
     data: Float32Array & NTupleOf<number, 16>;
@@ -249,8 +250,7 @@ class Mat4x4 {
     }
 }
 
-
-class Vec {
+export class Vec {
     x: number;
     y: number;
     z: number;
@@ -335,9 +335,7 @@ class Vec {
     static FORWARDS = Vec.of(0, 0, -1);
 }
 
-
-
-class Camera {
+export class Camera {
     pos: Vec = Vec.ZERO;
     gaze: Vec = Vec.FORWARDS;
     up: Vec = Vec.UP;
@@ -400,8 +398,7 @@ class Camera {
     }
 }
 
-
-class Bone implements Renderable {
+export class Bone implements Renderable {
     mat: Mat4x4;
     /** second matrix, for ease of animation */
     animMat: Mat4x4 | null;
@@ -447,16 +444,19 @@ class Bone implements Renderable {
     ]);
 
     // TODO finish porting
-    render(gl: WebGLRenderingContext, mat: Mat4x4) {
+    render(stuff: MyGlStuff, mat: Mat4x4) {
+        const { gl, programInfo: { vars: { uniformLocations: { u_FragColor, u_ModelMat }, attribLocations: { a_Position } } } } = stuff;
         let baseMat = this.mat;
         if(this.animMat !== null) baseMat = baseMat.matmul(this.animMat);
         if(showBones) {
             const showBoneMat = mat.matmul(baseMat.scale(this.length, this.length, this.length));
             gl.bufferData(gl.ARRAY_BUFFER, Bone.BONE_DISPLAY_POINTS, gl.STATIC_DRAW);
-            gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
-            gl.enableVertexAttribArray(a_Position);
+            if(a_Position !== null) {
+                gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(a_Position);
+            }
             gl.uniformMatrix4fv(u_ModelMat, false, showBoneMat.data);
-            gl.uniform4f(u_FragColor, 1, 0, 0, 1);
+            if(u_FragColor !== null) gl.uniform4f(u_FragColor, 1, 0, 0, 1);
             // adjust depth range so we render on top
             gl.depthRange(0, 0.01);
             gl.drawArrays(gl.LINE_STRIP, 0, Bone.BONE_DISPLAY_POINTS.length / 3);
@@ -465,18 +465,16 @@ class Bone implements Renderable {
         }
         if(this.headChildren.length > 0) {
             const headMat = mat.matmul(baseMat);
-            for(const child of this.headChildren) child.render(gl, headMat);
+            for(const child of this.headChildren) child.render(stuff, headMat);
         }
         if(this.tailChildren.length > 0) {
             const tailMat = mat.matmul(baseMat.translate(0, this.length, 0));
-            for(const child of this.tailChildren) child.render(gl, tailMat);
+            for(const child of this.tailChildren) child.render(stuff, tailMat);
         }
     }
 }
 
-
-
-class Mesh {
+export class Mesh {
     readonly verts: Float32Array;
     readonly indices: Uint16Array;
     constructor(verts: Float32Array | number[], indices: Uint16Array | number[]) {
@@ -579,7 +577,7 @@ class Mesh {
     }
 }
 
-class Color {
+export class Color {
     r: number;
     g: number;
     b: number;
@@ -596,7 +594,7 @@ class Color {
     }
 }
 
-class Model implements Renderable {
+export class Model implements Renderable {
     mesh: Mesh;
     mat: Mat4x4;
     color: Color;
@@ -606,7 +604,8 @@ class Model implements Renderable {
         this.color = color !== undefined ? color : new Color(0, 0, 0, 1);
     }
 
-    render(gl: WebGLRenderingContext, mat:Mat4x4) {
+    render(stuff: MyGlStuff, mat:Mat4x4) {
+        const { gl, programInfo: { vars: { uniformLocations: { u_FragColor, u_ModelMat } } } } = stuff;
         const newMat = mat.matmul(this.mat);
         gl.bufferData(gl.ARRAY_BUFFER, this.mesh.verts, gl.STATIC_DRAW);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.mesh.indices, gl.STATIC_DRAW);

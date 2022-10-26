@@ -51,7 +51,16 @@ function easeOutBack(x) {
     const c3 = c1 + 1;
     return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
 }
-
+// https://easings.net/#easeInExpo
+/** @type {EasingFunction} */
+function easeInExpo(x) {
+    return x === 0 ? 0 : Math.pow(2, 10 * x - 10);
+}
+// https://easings.net/#easeInOutExpo
+/** @type {EasingFunction} */
+function easeInOutExpo(x) {
+    return x === 0 ? 0 : x === 1 ? 1 : x < 0.5 ? Math.pow(2, 20 * x - 10) / 2 : (2 - Math.pow(2, -20 * x + 10)) / 2;
+}
 
 
 /** @param {number} t @param {number} a @param {number} b @returns {number} */
@@ -205,11 +214,12 @@ class AnimatorController {
 
     initUI() {
         const root = document.createElement('div');
-        const animatorsContainer = document.createElement('figure');
+        const animatorsContainer = document.createElement('details');
+        // animatorsContainer.open = true;
         root.appendChild(animatorsContainer);
-        const acCaption = document.createElement('figcaption');
+        const acCaption = document.createElement('summary');
         animatorsContainer.appendChild(acCaption);
-        acCaption.textContent = 'Animators';
+        acCaption.textContent = 'Animation Control';
         const radiosName = `animator`; // TODO make this unique
         const onRadioChange = (/** @type {InputEvent} */ e) => { // or should this be on input?
             const value = e.target.value;
@@ -232,9 +242,12 @@ class AnimatorController {
         }
         for(const name in this.animators) {
             const animator = this.animators[name];
-            const animatorContainer = document.createElement('figure');
+            // @ts-expect-error
+            const hasWidget = animator.initUI !== undefined;
+            const animatorContainer = document.createElement(hasWidget ? 'details' : 'figure');
+            // if(hasWidget) animatorContainer.open = true;
             animatorsContainer.appendChild(animatorContainer);
-            const acCaption = document.createElement('figcaption');
+            const acCaption = document.createElement(hasWidget ? 'summary' : 'figcaption');
             animatorContainer.appendChild(acCaption);
             acCaption.textContent = name;
             const radio = document.createElement('input');
@@ -245,8 +258,8 @@ class AnimatorController {
             radio.addEventListener('change', onRadioChange);
             this.radios.push(radio);
             acCaption.appendChild(radio);
-            if(animator.initUI !== undefined) {
-                // @ts-ignore
+            if(hasWidget) {
+                // @ts-expect-error
                 animatorContainer.appendChild(animator.initUI());
             }
         }

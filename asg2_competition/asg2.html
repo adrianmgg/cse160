@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Assignment 2</title>
+	</head>
+	
+	<body onload="main()">
+		<canvas id="canvas" width="400" height="400">
+		Please use a browser that supports "canvas"
+		</canvas>
+		<div id="ui_container">
+			<details open>
+				<summary>Info</summary>
+				<ul>
+					<li>sections like this one on Info can be expanded/collapsed by clicking on their titles (note the arrow/triangle)</li>
+					<li>click the toggle auto spin button to enable/disable spinning the camera around the scene</li>
+					<li>left-click and drag horizontally on the canvas to rotate your view of the scene (or adjust the view angle slider)</li>
+					<li>left-click and drag vertically on the canvas to move your view up and down</li>
+					<li>scroll with your cursor over the canvas to zoom in and out</li>
+					<li>manually rotating the camera with disable the auto rotation</li>
+					<li>click the radio buttons on the headings under Animators to switch animation (or switch to manual control mode)</li>
+					<li>(shift-clicking switches to one of the animations, so if you're already on the one it switches to nothing will change)</li>
+					<li>a debug overlay showing the model's armature can be enabled under Misc</li>
+				</ul>
+				<!-- <details><summary>About</summary>
+					<a href="https://twitter.com/_spatsula/status/1366954291961810944"></a>
+				</details> -->
+			</details>
+		</div>
+		<link rel="stylesheet" href="style.css">
+		<!-- TODO use modules? -->
+		<script src="lib/webgl-utils.js"></script>
+		<script src="lib/webgl-debug.js"></script>
+		<script src="lib/cuon-utils.js"></script>
+		<script src="anim.js"></script>
+		<script src="stuff.js"></script>
+		<script src="asg2.js"></script>
+	</body>
+</html>

@@ -1,0 +1,25 @@
+
+body {
+    font-family: monospace;
+}
+
+figure, details {
+    border: 1px darkgray solid;
+    /* display: flex; */
+    /* flex-flow: column; */
+    /* margin: auto; */
+    margin: 0.5em;
+}
+
+figcaption, summary {
+    background-color: #222;
+    color: #ccc;
+    padding: .3em;
+    /* text-align: center; */
+}
+
+details > *:not(summary), figure > *:not(figcaption) {
+    margin-left: 1em;
+}
+
+

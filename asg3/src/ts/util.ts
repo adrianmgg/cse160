@@ -84,3 +84,22 @@ export class Dict2D<
         }
     }
 }
+
+let warnCount: number = 0;
+const MAX_WARNINGS: number = 128;
+// TODO give this a better name
+const SUBSEQUENT_SILENCEDWARN_CHUNK_SIZE: number = 1000;
+// TODO give this a better name. it's an lifetime max, "rate limit" implies a per-time max (or could
+//      make it be a per-time max, that might be better tbh)
+// TODO maybe make this take a unique identifier for the warning type rather than being a global limit
+//      (maybe use symbols?)
+export function warnRateLimited(...data: any[]) {
+    if(warnCount < MAX_WARNINGS) {
+        console.warn(...data);
+    } else if(warnCount === MAX_WARNINGS) {
+        console.warn(`${warnCount} warnings reached, subsequent warnings will not be displayed!`);
+    } else if((warnCount - MAX_WARNINGS) % SUBSEQUENT_SILENCEDWARN_CHUNK_SIZE === 0) {
+        console.warn(`silenced ${SUBSEQUENT_SILENCEDWARN_CHUNK_SIZE} more warnings`);
+    }
+    warnCount += 1;
+}

@@ -46,6 +46,7 @@ export async function loadShaderFromFile(gl: WebGLRenderingContext, type: GLenum
     return shader;
 }
 
+// TODO shorten uniformLocations/attribLocations to be less verbose
 export type ProgramVarLocations<
     Attribs extends readonly string[],
     Uniforms extends readonly string[],

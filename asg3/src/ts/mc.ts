@@ -1,5 +1,5 @@
 import { idbOpen, idbRequest2Promise } from "./db.js";
-import { assert, debugAssert, Dict2D, NTupleOf } from "./util.js";
+import { assert, debugAssert, Dict2D, NTupleOf, warnRateLimited } from "./util.js";
 import { Color, Mesh } from './3d.js';
 import type { MyGlStuff } from "./main.js";
 
@@ -107,6 +107,10 @@ export class MCWorld {
     }
 
     render(stuff: MyGlStuff): void {
+        // TODO mesh rebuild loop should prob be elsewhere
+        for(const [chunk] of this.chunks) {
+            chunk.rebuildMeshes();
+        }
         for(const [chunk] of this.chunks) {
             chunk.render(stuff);
         }
@@ -185,6 +189,20 @@ export class Chunk {
         };
     }
 
+    private *iterVChunks(): Generator<readonly [vchunk: VChunk | null, idx: number], void, void> {
+        for(let i = 0; i < 16; i++) {
+            const vChunk = this.vChunks[i];
+            debugAssert(vChunk !== undefined);
+            yield [vChunk, i] as const;
+        }
+    }
+
+    rebuildMeshes() {
+        for(const [vChunk] of this.iterVChunks()) {
+            if(vChunk !== null) vChunk.rebuildMesh();
+        }
+    }
+
     render(stuff: MyGlStuff): void {
         for(let i = 0; i < 16; i++) {
             const vChunk = this.vChunks[i];
@@ -197,8 +215,19 @@ export class Chunk {
 
 export class VChunk {
     private readonly blockData: Uint8Array;
+    /**
+     * vertices of this vchunk's mesh. will be null when there is no mesh data, but a non-null value
+     * does NOT imply that the mesh doesn't need recalculating. for that, see {@link meshDirty}
+     */
+    private meshVerts: Float32Array | null;
+    private meshIndices: Uint16Array | null;
+    private meshDirty: boolean;
+
     constructor(blockData: Uint8Array) {
         this.blockData = blockData;
+        this.meshVerts = null;
+        this.meshIndices = null;
+        this.meshDirty = true;
     }
 
     private static blockIdx(x: number, y: number, z: number): number {
@@ -228,20 +257,76 @@ export class VChunk {
         return this.blockData;
     }
 
-    render(stuff: MyGlStuff, chunkX: number, chunkY: number, chunkZ: number): void {
+    rebuildMesh() {
+        if(this.meshDirty) this.buildMesh();
+    }
+
+    private static readonly CUBE_VERTS: readonly (readonly [number, number, number])[] = [
+        [1, 1, 1],
+        [0, 1, 1],
+        [0, 0, 1],
+        [1, 0, 1],
+        [1, 0, 0],
+        [1, 1, 0],
+        [0, 1, 0],
+        [0, 0, 0],
+    ] as const;
+    private static readonly CUBE_INDICES: readonly number[] = [
+        0, 1, 2, 0, 2, 3, // front
+        0, 3, 4, 0, 4, 5, // right
+        0, 5, 6, 0, 6, 1, // up
+        1, 6, 7, 1, 7, 2, // left
+        7, 4, 3, 7, 3, 2, // down
+        4, 7, 6, 4, 6, 5, // back
+    ] as const;
+
+    // TODO can i make this async?
+    private buildMesh() {
+        // TODO super unoptimized mesh building for now, just to make sure this all works
+        // const perCube = /* quads per cube */ 6 /* tris per quad */ * 2 /* verts per tri */ * 3 /* data-s per vert */ * 3;
+        // const meshData = new Float32Array(/* length * width * height */ 16 * 16 * 16 /* data-s per cube */ * perCube);
+        const meshVerts: number[] = [];
+        const meshIndices: number[] = [];
         for(let x = 0; x < 16; x++) {
             for(let y = 0; y < 16; y++) {
                 for(let z = 0; z < 16; z++) {
                     const block = this.getBlock(x, y, z);
                     if(block === Block.AIR) continue;
-                    stuff.gl.uniform3f(stuff.programInfo.vars.uniformLocations.u_BlockPos, chunkX + x, chunkY + y, chunkZ + z);
-                    const color = block_colors[block];
-                    stuff.gl.uniform4f(stuff.programInfo.vars.uniformLocations.u_FragColor, color.r, color.g, color.b, color.a);
-                    stuff.gl.drawElements(stuff.gl.TRIANGLES, Mesh.UNIT_CUBE.indices.length, stuff.gl.UNSIGNED_SHORT, 0);
-                    // if(block !== Block.AIR) console.log(Block[block]);
-                    // new Model(Mesh.UNIT_CUBE, mat.matmul(Mat4x4.translate(x, y, z)), block_colors[block]).render(stuff, mat);
+                    // lack of a -1 here is intentional, since what we want is the index immediately
+                    // after the current last element
+                    const baseIdx = meshVerts.length / 3;
+                    for(const vert of VChunk.CUBE_VERTS) {
+                        meshVerts.push(vert[0] + x, vert[1] + y, vert[2] + z);
+                    }
+                    for(const idx of VChunk.CUBE_INDICES) {
+                        meshIndices.push(idx + baseIdx);
+                    }
                 }
             }
+        }
+        this.meshVerts = new Float32Array(meshVerts);
+        this.meshIndices = new Uint16Array(meshIndices);
+        this.meshDirty = false;
+    }
+
+    render(stuff: MyGlStuff, chunkX: number, chunkY: number, chunkZ: number): void {
+        const { gl, programInfo: { vars: { uniformLocations: { u_BlockPos, u_FragColor }, attribLocations: { a_Position } } } } = stuff;
+        if(this.meshVerts !== null && this.meshIndices !== null) {
+            // TODO is this how we should be doing it? or should we put the verts and indices into a
+            // gl buffer when we calculate them and then change which buffer ARRAY_BUFFER has? gotta
+            // read up on some more gl stuff or maybe ask in office hours
+            gl.bufferData(gl.ARRAY_BUFFER, this.meshVerts, gl.STATIC_DRAW);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices, gl.STATIC_DRAW);
+            // our overall pos
+            // TODO probably rename BlockPos to something more general like Offset or whatever
+            // TODO should probably add helpers for setting these rather than doing the null check every single time
+            if(u_BlockPos !== null) gl.uniform3f(u_BlockPos, chunkX, chunkY, chunkZ);
+            if(u_FragColor !== null) gl.uniform4f(u_FragColor, (chunkX % 256) / 255, (chunkY % 256) / 255, (chunkZ % 256) / 255, 1.0);
+            // render
+            gl.drawElements(gl.TRIANGLES, this.meshIndices.length, gl.UNSIGNED_SHORT, 0);
+            // gl.drawElements(gl.LINES, this.meshIndices.length, gl.UNSIGNED_SHORT, 0);
+        } else {
+            warnRateLimited(`skipping render of vchunk ${chunkX},${chunkY},${chunkZ} as it has no mesh`);
         }
     }
 }

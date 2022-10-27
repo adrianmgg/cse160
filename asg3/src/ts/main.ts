@@ -1,28 +1,52 @@
-import { Camera } from './3d.js';
+import { Camera, Mesh, Vec } from './3d.js';
 import { getProgramVarLocations, loadProgramFromFiles, ProgramVarLocations } from './gl.js';
 import { MCWorld } from './mc.js';
 import { assert } from "./util.js";
 
+/*
+
+just gonna make drop some notes here -
+
+general overview of TODO stuff
+- texture loading
+- texture atlasing
+  - mip mapping atlases? might need to roll this myself since the standard mip mapping will probably
+    blur across the atlased textures, which we don't want
+- add uv to mesh, shader stuff
+- vchunks should generate meshes
+
+*/
+
+
+// making a type to hold all these so i can just pass them around instead of having global variables
+// for everything
 export type MyGlStuff = {
     gl: WebGLRenderingContext;
     programInfo: MyProgramInfo;
     buffers: MyBuffersInfo;
+};
+
+// TODO give this a better name
+export type MyStuff = {
+    glStuff: MyGlStuff;
+    world: MCWorld;
     camera: Camera;
-}
+};
 
 async function main() {
     const gl = initWebGL();
     setupWebGL(gl);
     const programInfo = await setupShaders(gl);
     const buffersInfo = setupBuffers(gl, programInfo);
-    const camera = new Camera();
-    const glStuff: MyGlStuff = {gl, programInfo, buffers: buffersInfo, camera};
+    const glStuff: MyGlStuff = {gl, programInfo, buffers: buffersInfo};
     // setupUI();
     const world = await setupWorld();
-    // store these on the global scope. purely for easier debugging, our code shouldn't access them this way
+    const camera = new Camera();
+    const stuff: MyStuff = {glStuff, camera, world};
+    // store these on the global scope. purely for easier debugging, none of our code will use it
     // @ts-expect-error
-    window.mcStuff = {glStuff, world};
-    requestAnimationFrame(tick.bind(null, glStuff));
+    window.mcStuff = stuff;
+    requestAnimationFrame(tick.bind(null, stuff));
 }
 
 function initWebGL(): WebGLRenderingContext {
@@ -41,15 +65,18 @@ function setupWebGL(gl: WebGLRenderingContext) {
 
 type MyProgramInfo = {
     program: WebGLProgram;
-    vars: ProgramVarLocations<['a_Position'], ['u_FragColor', 'u_ModelMat']>;
+    vars: ProgramVarLocations<['a_Position'], ['u_FragColor', 'u_ModelMat', 'u_BlockPos']>;
 };
 
 async function setupShaders(gl: WebGLRenderingContext): Promise<MyProgramInfo> {
     const program = await loadProgramFromFiles(gl, 'shaders/vertex.vert', 'shaders/fragment.frag');
+    // TODO not the right place for this todo but whatever - should i be `deleteShader`ing after i'm
+    // done making the program?
+    gl.useProgram(program);
     return {
         program: program,
-        vars: getProgramVarLocations(gl, program, ['a_Position'] as const, ['u_FragColor', 'u_ModelMat'] as const),
-    }
+        vars: getProgramVarLocations(gl, program, ['a_Position'] as const, ['u_FragColor', 'u_ModelMat', 'u_BlockPos'] as const),
+    };
 }
 
 type MyBuffersInfo = {
@@ -75,8 +102,27 @@ async function setupWorld(): Promise<MCWorld> {
     return await MCWorld.openWorld('new world');
 }
 
-function tick(stuff: MyGlStuff, now: DOMHighResTimeStamp): void {
-    clearCanvas(stuff);
+function tick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
+    clearCanvas(stuff.glStuff);
+
+    // stuff.camera.gaze = Vec.fromCylindrical(1, now / 1000, 0);
+    // stuff.camera.pos = Vec.of(10, 0, 10);
+    stuff.camera.pos = Vec.fromCylindrical(20, now / 1000, 20);
+    stuff.camera.pos.x += 8;
+    stuff.camera.pos.z += 8;
+    stuff.camera.gazeTowards(Vec.of(8, 0, 8));
+    stuff.camera.gaze = stuff.camera.gaze.div(stuff.camera.gaze.magnitude());
+    stuff.camera.pos.y += 20;
+
+    // TODO temp
+    const { glStuff: { gl, programInfo: { vars: { uniformLocations: { u_ModelMat } } } } } = stuff;
+    gl.bufferData(gl.ARRAY_BUFFER, Mesh.UNIT_CUBE.verts, gl.STATIC_DRAW);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Mesh.UNIT_CUBE.indices, gl.STATIC_DRAW);
+
+    gl.uniformMatrix4fv(u_ModelMat, false, stuff.camera.world2viewMat().data);
+
+    stuff.world.render(stuff.glStuff);
+
     requestAnimationFrame(tick.bind(null, stuff));
 }
 

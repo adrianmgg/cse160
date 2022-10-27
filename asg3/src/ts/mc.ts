@@ -1,5 +1,7 @@
 import { idbOpen, idbRequest2Promise } from "./db.js";
 import { assert, debugAssert, Dict2D, NTupleOf } from "./util.js";
+import { Color, Mesh } from './3d.js';
+import type { MyGlStuff } from "./main.js";
 
 const MC_WORLD_IDB_VERSION = 1 as const;
 
@@ -10,6 +12,15 @@ export enum Block {
     DIRT = 3,
     COBBLESTONE = 4,
     BEDROCK = 7,
+}
+
+const block_colors: Record<Block, Color> = {
+    [Block.AIR]:         Color.fromRGBHex(0xFFFFFF),
+    [Block.STONE]:       Color.fromRGBHex(0x747474),
+    [Block.GRASS]:       Color.fromRGBHex(0x589258),
+    [Block.DIRT]:        Color.fromRGBHex(0x785539),
+    [Block.COBBLESTONE]: Color.fromRGBHex(0x525252),
+    [Block.BEDROCK]:     Color.fromRGBHex(0x000000),
 }
 
 export class MCWorld {
@@ -25,8 +36,8 @@ export class MCWorld {
         const db = await idbOpen(worldName, MC_WORLD_IDB_VERSION, this.upgradeWorldDB);
         const world = new MCWorld(db);
         const spawnChunk = await world.loadChunk(0, 0);
-        spawnChunk.setBlock(0, 0, 20, Block.GRASS);
-        await world.unloadChunk(0, 0);
+        // spawnChunk.setBlock(0, 0, 20, Block.GRASS);
+        // await world.unloadChunk(0, 0);
         // const chunkB = await world.getOrCreateChunk(0, 1);
         // chunkA.vChunks[0] = VChunk.newVChunk();
         // world.saveChunk(chunkA);
@@ -94,6 +105,12 @@ export class MCWorld {
             this.dbSaveChunk(chunk);
         }
     }
+
+    render(stuff: MyGlStuff): void {
+        for(const [chunk] of this.chunks) {
+            chunk.render(stuff);
+        }
+    }
 }
 
 type DBChunkData = {
@@ -117,23 +134,23 @@ export class Chunk {
         return this.vChunks[vChunkY] = VChunk.newVChunk();
     }
 
-    private static vcIdx(z: number): number {
-        return z >> 4; // floor(z / 16)
+    private static vcIdx(y: number): number {
+        return y >> 4; // floor(y / 16)
     }
 
     setBlock(x: number, y: number, z: number, block: Block) {
-        const vcZ = Chunk.vcIdx(z);
-        const vc = this.getOrCreateVChunk(vcZ);
-        vc.setBlock(x, y, z - (vcZ * 16), block);
+        const vcY = Chunk.vcIdx(y);
+        const vc = this.getOrCreateVChunk(vcY);
+        vc.setBlock(x, y - (vcY * 16), z, block);
     }
 
     fillArea(minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number, block: Block) {
-        debugAssert(0 <= minX && minX < 16, 'fillArea() minX out of range');
-        debugAssert(0 <= minY && minY < 16, 'fillArea() minY out of range');
-        debugAssert(0 <= minZ && minZ < 16, 'fillArea() minZ out of range');
-        debugAssert(0 <= maxX && maxX < 16, 'fillArea() maxX out of range');
-        debugAssert(0 <= maxY && maxY < 16, 'fillArea() maxY out of range');
-        debugAssert(0 <= maxZ && maxZ < 16, 'fillArea() maxZ out of range');
+        debugAssert(0 <= minX && minX <  16, 'fillArea() minX out of range');
+        debugAssert(0 <= minY && minY < 256, 'fillArea() minY out of range');
+        debugAssert(0 <= minZ && minZ <  16, 'fillArea() minZ out of range');
+        debugAssert(0 <= maxX && maxX <  16, 'fillArea() maxX out of range');
+        debugAssert(0 <= maxY && maxY < 256, 'fillArea() maxY out of range');
+        debugAssert(0 <= maxZ && maxZ <  16, 'fillArea() maxZ out of range');
         for(let x = minX; x <= maxX; x++) {
             for(let y = minY; y <= maxY; y++) {
                 for(let z = minZ; z <= maxZ; z++) {
@@ -145,10 +162,10 @@ export class Chunk {
 
     private async doWorldgen(): Promise<void> {
         console.log(`running worldgen for chunk ${this.chunkPos}`);
-        this.fillArea(0, 0, 0, 15, 15, 0, Block.BEDROCK);
-        this.fillArea(0, 0, 1, 15, 15, 30, Block.STONE);
-        this.fillArea(0, 0, 31, 15, 15, 33, Block.DIRT);
-        this.fillArea(0, 0, 34, 15, 15, 34, Block.GRASS);
+        this.fillArea(0,  0, 0, 15,  0, 15, Block.BEDROCK);
+        this.fillArea(0,  1, 0, 15, 30, 15, Block.STONE);
+        this.fillArea(0, 31, 0, 15, 33, 15, Block.DIRT);
+        this.fillArea(0, 34, 0, 15, 34, 15, Block.GRASS);
     }
 
     static async newChunk(chunkX: number, chunkY: number): Promise<Chunk> {
@@ -167,6 +184,15 @@ export class Chunk {
             vChunks: this.vChunks.map(v => v === null ? null : v.toDB()) as NTupleOf<DBVChunkData | null, 16>,
         };
     }
+
+    render(stuff: MyGlStuff): void {
+        for(let i = 0; i < 16; i++) {
+            const vChunk = this.vChunks[i];
+            debugAssert(vChunk !== undefined);
+            if(vChunk === null || vChunk === undefined) continue;
+            vChunk.render(stuff, this.chunkPos[0] * 16, i * 16, this.chunkPos[0] * 16);
+        }
+    }
 }
 
 export class VChunk {
@@ -179,7 +205,11 @@ export class VChunk {
         debugAssert(0 <= x && x < 16, 'vchunk block index x out if range');
         debugAssert(0 <= y && y < 16, 'vchunk block index y out if range');
         debugAssert(0 <= z && z < 16, 'vchunk block index z out if range');
-        return (x << 0) + (y << 4) + (z << 8);
+        return (x << 0) + (y << 8) + (z << 4);
+    }
+
+    getBlock(x: number, y: number, z: number): Block {
+        return this.blockData[VChunk.blockIdx(x, y, z)] as Block;
     }
 
     setBlock(x: number, y: number, z: number, block: Block) {
@@ -196,5 +226,22 @@ export class VChunk {
 
     toDB(): DBVChunkData {
         return this.blockData;
+    }
+
+    render(stuff: MyGlStuff, chunkX: number, chunkY: number, chunkZ: number): void {
+        for(let x = 0; x < 16; x++) {
+            for(let y = 0; y < 16; y++) {
+                for(let z = 0; z < 16; z++) {
+                    const block = this.getBlock(x, y, z);
+                    if(block === Block.AIR) continue;
+                    stuff.gl.uniform3f(stuff.programInfo.vars.uniformLocations.u_BlockPos, chunkX + x, chunkY + y, chunkZ + z);
+                    const color = block_colors[block];
+                    stuff.gl.uniform4f(stuff.programInfo.vars.uniformLocations.u_FragColor, color.r, color.g, color.b, color.a);
+                    stuff.gl.drawElements(stuff.gl.TRIANGLES, Mesh.UNIT_CUBE.indices.length, stuff.gl.UNSIGNED_SHORT, 0);
+                    // if(block !== Block.AIR) console.log(Block[block]);
+                    // new Model(Mesh.UNIT_CUBE, mat.matmul(Mat4x4.translate(x, y, z)), block_colors[block]).render(stuff, mat);
+                }
+            }
+        }
     }
 }

@@ -7,9 +7,19 @@ export function assert(condition: boolean, message?: string): asserts condition 
     }
 }
 
+/**
+ * similar to {@link assert}, but:
+ * - not enabled in production
+ * - triggers the debugger when there's an error
+ */
 export function debugAssert(condition: boolean, message?: string): asserts condition {
-    // TODO have debug toggle. for now this is just a normal assertion
-    assert(condition, message);
+    // TODO have debug toggle
+    if(!condition) {
+        let errMsg = 'assertion failed';
+        if(message !== null) errMsg += ` - ${message}`;
+        console.error(errMsg);
+        debugger;
+    }
 }
 
 // TODO give this a better name

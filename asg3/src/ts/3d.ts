@@ -448,21 +448,22 @@ export class Bone implements Renderable {
         const { gl, programInfo: { vars: { uniformLocations: { u_FragColor, u_ModelMat }, attribLocations: { a_Position } } } } = stuff;
         let baseMat = this.mat;
         if(this.animMat !== null) baseMat = baseMat.matmul(this.animMat);
-        if(showBones) {
-            const showBoneMat = mat.matmul(baseMat.scale(this.length, this.length, this.length));
-            gl.bufferData(gl.ARRAY_BUFFER, Bone.BONE_DISPLAY_POINTS, gl.STATIC_DRAW);
-            if(a_Position !== null) {
-                gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
-                gl.enableVertexAttribArray(a_Position);
-            }
-            gl.uniformMatrix4fv(u_ModelMat, false, showBoneMat.data);
-            if(u_FragColor !== null) gl.uniform4f(u_FragColor, 1, 0, 0, 1);
-            // adjust depth range so we render on top
-            gl.depthRange(0, 0.01);
-            gl.drawArrays(gl.LINE_STRIP, 0, Bone.BONE_DISPLAY_POINTS.length / 3);
-            // TODO this depthRange fiddling stuff should probably move somewhere else
-            gl.depthRange(0.01, 1.0);
-        }
+        // TODO show bones toggle
+        // if(showBones) {
+        //     const showBoneMat = mat.matmul(baseMat.scale(this.length, this.length, this.length));
+        //     gl.bufferData(gl.ARRAY_BUFFER, Bone.BONE_DISPLAY_POINTS, gl.STATIC_DRAW);
+        //     if(a_Position !== null) {
+        //         gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+        //         gl.enableVertexAttribArray(a_Position);
+        //     }
+        //     gl.uniformMatrix4fv(u_ModelMat, false, showBoneMat.data);
+        //     if(u_FragColor !== null) gl.uniform4f(u_FragColor, 1, 0, 0, 1);
+        //     // adjust depth range so we render on top
+        //     gl.depthRange(0, 0.01);
+        //     gl.drawArrays(gl.LINE_STRIP, 0, Bone.BONE_DISPLAY_POINTS.length / 3);
+        //     // TODO this depthRange fiddling stuff should probably move somewhere else
+        //     gl.depthRange(0.01, 1.0);
+        // }
         if(this.headChildren.length > 0) {
             const headMat = mat.matmul(baseMat);
             for(const child of this.headChildren) child.render(stuff, headMat);
@@ -611,7 +612,7 @@ export class Model implements Renderable {
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.mesh.indices, gl.STATIC_DRAW);
         gl.uniformMatrix4fv(u_ModelMat, false, newMat.data);
         // color
-        gl.uniform4f(u_FragColor, this.color.r, this.color.g, this.color.b, this.color.a);
+        if(u_FragColor !== null) gl.uniform4f(u_FragColor, this.color.r, this.color.g, this.color.b, this.color.a);
         // draw mesh
         gl.drawElements(gl.TRIANGLES, this.mesh.indices.length, gl.UNSIGNED_SHORT, 0);
         // // kinda janky (temporary) wireframe drawing

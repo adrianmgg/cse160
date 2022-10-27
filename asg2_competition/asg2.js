@@ -36,6 +36,8 @@ let rootBone;
 
 /** @type {HTMLElement} */
 let uiContainer;
+/** @type {HTMLElement} */
+let animatorsUIContainer;
 
 function main() {
 	setupWebGL();
@@ -147,6 +149,9 @@ let showBones = false;
 function setupUI() {
 	uiContainer = document.getElementById('ui_container');
 
+	animatorsUIContainer = document.createElement('div');
+	uiContainer.appendChild(animatorsUIContainer);
+
 	const camControlSection = document.createElement('details');
 	// camControlSection.open = true;
 	const camControlCaption = document.createElement('summary');
@@ -237,10 +242,10 @@ function setupScene() {
 	armLowerLBone.tailChildren.push(hand, handThing);
 	armLowerRBone.tailChildren.push(hand, handThing);
 	// feet
-	const footLBone = new Bone(Mat4x4.translate(.1, 0, -.3).rotateZ(Math.PI / 2 * -1).rotateX(Math.PI * (1/4)), 1, 'footL');
-	const footRBone = new Bone(Mat4x4.translate(-.1, 0, -.3).rotateZ(Math.PI / 2 * -1).rotateX(Math.PI * (3/4)), 1, 'footR');
-	torsoBone.headChildren.push(footLBone);
-	torsoBone.headChildren.push(footRBone);
+	const footLBone = new Bone(Mat4x4.translate(.1, .25, -.3).rotateZ(Math.PI / 2 * -1).rotateX(Math.PI * (1/4)), 1, 'footL');
+	const footRBone = new Bone(Mat4x4.translate(-.1, .25, -.3).rotateZ(Math.PI / 2 * -1).rotateX(Math.PI * (3/4)), 1, 'footR');
+	// torsoBone.headChildren.push(footLBone, footRBone);
+	rootBone.headChildren.push(footLBone, footRBone);
 	const foot = new Model(Mesh.UNIT_ICOSPHERE_TOUCHING_XY, Mat4x4.scale(.6, 1, .8), marColorRed);
 	footLBone.headChildren.push(foot);
 	footRBone.headChildren.push(foot);
@@ -272,7 +277,9 @@ function setupScene() {
 		new TransformAnimator(eyeRBone, 'animMat', {sclY: {offset: 0.025, period: 6.74389543, min: 0, max: 1, ease: t => easeInOutCubic(holdAtOneFor(1 - 0.5 / 6.74389543, t))}}),
 	);
 
+	const runPeriod = 0.5;
 	animators = new AnimatorController({
+		'Manual Control': new ManualControlAnimator(rootBone),
 		Wave: new AnimatorGroup(
 			new TransformAnimator(armUpperLBone, 'animMat', {rotZ: {ease: easeInOutSine, min: Math.PI * (-2/8), max: Math.PI * (0/8)}}),
 			new TransformAnimator(armLowerLBone, 'animMat', {rotZ: {ease: easeInOutCubic, min: Math.PI * (-1/16), max: Math.PI * (1/16)}}),
@@ -284,18 +291,31 @@ function setupScene() {
 		),
 		Jump: new AnimatorGroup(
 			new TransformAnimator(rootBone, 'animMat', {posY: {easeUp: easeOutBounce, easeBack: easeOutCubic, period: 2, peakAt: .7}}),
-			new TransformAnimator(armUpperLBone, 'animMat', {rotZ: {easeUp: easeOutCubic, easeBack: easeOutCubic, period: 2, peakAt: .7, min: Math.PI * (0/8), max: Math.PI * (-2/8)}}),
-			new TransformAnimator(armUpperRBone, 'animMat', {rotZ: {easeUp: easeOutCubic, easeBack: easeOutCubic, period: 2, peakAt: .7, min: Math.PI * (0/8), max: Math.PI * (-2/8)}}),
+			new TransformAnimator(armUpperLBone, 'animMat', {rotZ: {easeUp: easeOutBounce, easeBack: easeOutCubic, period: 2, peakAt: .7, min: Math.PI * (1/8), max: Math.PI * (-1/8)}}),
+			new TransformAnimator(armUpperRBone, 'animMat', {rotZ: {easeUp: easeOutBounce, easeBack: easeOutCubic, period: 2, peakAt: .7, min: Math.PI * (1/8), max: Math.PI * (-1/8)}}),
+			new TransformAnimator(armLowerLBone, 'animMat', {rotZ: {easeUp: easeOutBounce, easeBack: easeOutCubic, period: 2, peakAt: .7, min: Math.PI * (1/8), max: Math.PI * (-1/8)}}),
+			new TransformAnimator(armLowerRBone, 'animMat', {rotZ: {easeUp: easeOutBounce, easeBack: easeOutCubic, period: 2, peakAt: .7, min: Math.PI * (1/8), max: Math.PI * (-1/8)}}),
 			new TransformAnimator(footLBone, 'animMat', {rotZ: {ease: easeOutBack, period: 2, peakAt: .7, offset: .15, min: Math.PI * (0/8), max: Math.PI * (2/8)}}),
 			new TransformAnimator(footRBone, 'animMat', {rotZ: {ease: easeOutBack, period: 2, peakAt: .7, offset: .15, min: Math.PI * (0/8), max: Math.PI * (2/8)}}),
+			new TransformAnimator(torsoBone, 'animMat', {rotX: {period: 2, peakAt: .7, min: Math.PI * (1/32), max: Math.PI * (-1/64),}}),
+			new TransformAnimator(headBone, 'animMat', {rotX: {period: 2, peakAt: .7, easeUp: easeOutBounce, easeBack: easeInOutSine, min: Math.PI * (-2/32), max: Math.PI * (2/16),}}),
 			animBlink,
+			// new TransformAnimator(eyeLBone, 'animMat', {sclY: {offset: .75, period: 2, peakAt: .7, min: 0, max: 1, ease: t => easeInOutCubic(holdAtOneFor(1 - 0.5 / 6, t))}}),
+			// new TransformAnimator(eyeRBone, 'animMat', {sclY: {offset: .75, period: 2, peakAt: .7, min: 0, max: 1, ease: t => easeInOutCubic(holdAtOneFor(1 - 0.5 / 6, t))}}),
 		),
 		Blink: animBlink,
-		'Manual Control': new ManualControlAnimator(rootBone),
+		// Run: new AnimatorGroup(
+		// 	new TransformAnimator(footLBone, 'animMat', {rotZ: {period: runPeriod, offset: 0, min: Math.PI * (-2/16), max: Math.PI * (3/16), ease: easeInOutExpo, peakAt: 0.6}}),
+		// 	new TransformAnimator(footRBone, 'animMat', {rotZ: {period: runPeriod, offset: runPeriod / 2, min: Math.PI * (-2/16), max: Math.PI * (3/16), ease: easeInOutExpo, peakAt: 0.6}}),
+		// 	new TransformAnimator(rootBone, 'animMat', {posY: {period: runPeriod / 2, offset: runPeriod * 0.4, min: .2, max: 0, easeBack: easeInOutCubic, easeUp: easeInOutExpo}}),
+		// ),
+		// Fall: new AnimatorGroup(
+		// 	new TransformAnimator(rootBone, 'animMat', {rotX: Math.PI / -2, posZ: -1.7, posY: {min: 6, max: 0, period: 4, peakAt: 0, ease: easeInBounce}}),
+		// ),
 	});
-	animators.currentAnimator = 'Wave';
+	animators.currentAnimator = 'Jump';
 
-	uiContainer.appendChild(animators.initUI());
+	animatorsUIContainer.appendChild(animators.initUI());
 }
 
 

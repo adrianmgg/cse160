@@ -170,34 +170,3 @@ export function atlasImages(images: (readonly [name: string, img: HTMLImageEleme
     return {image: atlasCanvas, texturePositions};
     // return [atlasCanvas, atlasInfo] as const;
 }
-
-//     // ==== set up the canvas we'll be drawing the atlas to
-//     const perTexSize = 16; // hardcoded for now. all textures must be square
-//     // just gonna hardcode the atlas size for now. eventually this should be dynamic
-//     const atlasSize = 512;
-//     const atlasCanvas = document.createElement('canvas');
-//     atlasCanvas.width = atlasSize;
-//     atlasCanvas.height = atlasSize;
-//     const atlasCtx = atlasCanvas.getContext('2d');
-//     assert(atlasCtx !== null);
-
-//     // ==== assign atlas positions to each of our textures
-//     const tex2atlasPos = textureNames.map((texName, i) => {
-//         const atlasGridX = i % (atlasSize / perTexSize);
-//         const atlasGridY = i - atlasGridX;
-//         return [texName, [atlasGridX * perTexSize, atlasGridY * perTexSize]] as const;
-//     });
-
-//     // ==== load our textures
-//     await Promise.all(tex2atlasPos.map(async ([texName, [x, y]]) => {
-//         const img = await loadImgFromPath(texName2Path(texName));
-//         assert(img.width === perTexSize && img.height === perTexSize);
-//         atlasCtx.drawImage(img, x, y);
-//     }));
-
-//     // ==== done!
-//     const texturePositions = Object.fromEntries(tex2atlasPos.map(
-//         ([name, [x, y]]) => [name, [x / atlasSize, y / atlasSize]] as const
-//     ));
-//     return {atlasImage: atlasCanvas, texturePositions};
-// }

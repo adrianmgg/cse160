@@ -52,6 +52,10 @@ export class Dict2D<
         return this.data[a]?.[b];
     }
 
+    private getRow(a: TKeyOuter): {[K in TKeyInner]?: TValue} | undefined {
+        return this.data[a];
+    }
+
     private getOrCreateRow(a: TKeyOuter): {[K in TKeyInner]?: TValue} {
         return this.data[a] ?? (this.data[a] = {});
     }
@@ -68,7 +72,7 @@ export class Dict2D<
     }
 
     public has(a: TKeyOuter, b: TKeyInner): boolean {
-        const row = this.data[a];
+        const row = this.getRow(a);
         if(row === undefined) return false;
         else return b in row;
     }
@@ -110,4 +114,10 @@ export function setFind<T>(set: Set<T>, predicate: (v: T) => boolean): T | undef
         if(predicate(x)) return x;
     }
     return undefined;
+}
+
+export function setMap<T, U>(set: Set<T>, func: (value: T, set: Set<T>) => U): Set<U> {
+    const newSet = new Set<U>;
+    for(const el of set) newSet.add(func(el, set));
+    return newSet;
 }

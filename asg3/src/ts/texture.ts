@@ -1,4 +1,4 @@
-import { assert, setFind } from "./util.js";
+import { assert, setFind, setMap } from "./util.js";
 
 function loadImgFromPath(path: string): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
@@ -28,7 +28,7 @@ export type TextureAtlasInfo = {
 };
 
 /** debug switch, draw internal state of atlasing algorithm to atlas image */
-const drawFreeRects = false;
+const drawFreeRects = true;
 
 /** whether a and b overlap */
 function overlaps(a: DOMRectReadOnly, b: DOMRectReadOnly): boolean {
@@ -51,27 +51,44 @@ function addIIFNotDegenerate(set: Set<DOMRectReadOnly>, r: DOMRectReadOnly) {
 }
 
 export function atlasImages(images: (readonly [name: string, img: HTMLImageElement])[]): TextureAtlasInfo {
-    const atlasSize = 128; // TODO just gonna hardcode this for now, should probably be dynamic
+    let atlasSize: number = 128;
 
     // setup initial free rectangles
     // DOMRectReadOnly already has everything we need, so might as well just use that instead of writing our
     // own rect stuff
     // const freeRects: DOMRectReadOnly[] = [];
-    const freeRects: Set<DOMRectReadOnly> = new Set();
+    let freeRects: Set<DOMRectReadOnly> = new Set();
     // excluding the 0,0 corner's quarter from the start so i can use that area for the mip map
     freeRects.add(new DOMRectReadOnly(0, atlasSize / 2, atlasSize / 2, atlasSize / 2));
     freeRects.add(new DOMRectReadOnly(atlasSize / 2, 0, atlasSize / 2, atlasSize));
 
     //
-    const packedRects: [string, HTMLImageElement, DOMRectReadOnly][] = [];
+    let packedRects: [string, HTMLImageElement, DOMRectReadOnly][] = [];
 
     // pack our images
     // TODO cite ("a thousand ways wto pack the bin", Algorithm 3: The Maximal Rectangles algorithm.)
     for(const [name, img] of images) {
         const imgRect = new DOMRectReadOnly(0, 0, img.width, img.height);
         // " Decide the free rectangle F_i to pack the rectangle R into
-        const chosenFreeRect = setFind(freeRects, r => fitsIn(imgRect, r));
-        assert(chosenFreeRect !== undefined, 'no space left in which to pack this image');
+        let chosenFreeRect: DOMRectReadOnly | undefined;
+        // resize as needed until we have space for the texture
+        // this probably isn't the optimal method with this algorithm but it works well enough
+        while((chosenFreeRect = setFind(freeRects, r => fitsIn(imgRect, r))) === undefined) {
+            // grow into next pow 2 size, still leaving space for mipmap
+            // (this part was added by me, not part of the original algorithm afaik)
+            // move the existing free rects to what will be the bottom right of the new atlas
+            freeRects = setMap(freeRects, rect => new DOMRectReadOnly(rect.x + atlasSize, rect.y + atlasSize, rect.width, rect.height));
+            // do the same for the textures we've already packed
+            packedRects = packedRects.map(  ([name, img, rect]) => [name, img, new DOMRectReadOnly(rect.x + atlasSize, rect.y + atlasSize, rect.width, rect.height)]);
+            // add a free rect where the old reserved mipmap area was
+            freeRects.add(new DOMRectReadOnly(atlasSize, atlasSize, atlasSize / 2, atlasSize / 2));
+            // add free rects for the 2 new free areas we get from resizing
+            // (but not the third one since it's the new reserved mipmap area)
+            freeRects.add(new DOMRectReadOnly(0, atlasSize, atlasSize, atlasSize));
+            freeRects.add(new DOMRectReadOnly(atlasSize, 0, atlasSize, atlasSize));
+            // update the atlas size variable
+            atlasSize *= 2;
+        }
         // " Decide the orientation for the rectangle and place it at the bottom-left of F_i
         // (here I've adjusted it to use top left)
         // " Denote by B the bounding box of R in the bin after it has been positioned

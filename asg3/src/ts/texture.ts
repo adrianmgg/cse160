@@ -168,5 +168,4 @@ export function atlasImages(images: (readonly [name: string, img: HTMLImageEleme
     ] as const));
 
     return {image: atlasCanvas, texturePositions};
-    // return [atlasCanvas, atlasInfo] as const;
 }

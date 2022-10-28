@@ -14,6 +14,24 @@ export enum Block {
     BEDROCK = 7,
 }
 
+// 0, 1, 2, 0, 2, 3, // front
+// 0, 3, 4, 0, 4, 5, // right
+// 0, 5, 6, 0, 6, 1, // up
+// 1, 6, 7, 1, 7, 2, // left
+// 7, 4, 3, 7, 3, 2, // down
+// 4, 7, 6, 4, 6, 5, // back
+
+enum CubeFace { FRONT, RIGHT, UP, LEFT, DOWN, BACK };
+
+const BLOCK_TEXTURES: Record<Block, null | string | readonly [front: string, right: string, up: string, left: string, down: string, back: string]> = {
+    [Block.AIR]:         null,
+    [Block.STONE]:       'stone',
+    [Block.GRASS]:       ['grass_side', 'grass_side', 'grass', 'grass_side', 'dirt', 'grass_side'],
+    [Block.DIRT]:        'dirt',
+    [Block.COBBLESTONE]: 'cobblestone',
+    [Block.BEDROCK]:     'bedrock',
+} as const;
+
 const block_colors: Record<Block, Color> = {
     [Block.AIR]:         Color.fromRGBHex(0xFFFFFF),
     [Block.STONE]:       Color.fromRGBHex(0x747474),
@@ -221,12 +239,14 @@ export class VChunk {
      */
     private meshVerts: Float32Array | null;
     private meshIndices: Uint16Array | null;
+    private meshUVs: Float32Array | null;
     private meshDirty: boolean;
 
     constructor(blockData: Uint8Array) {
         this.blockData = blockData;
         this.meshVerts = null;
         this.meshIndices = null;
+        this.meshUVs = null;
         this.meshDirty = true;
     }
 
@@ -289,6 +309,7 @@ export class VChunk {
         // const meshData = new Float32Array(/* length * width * height */ 16 * 16 * 16 /* data-s per cube */ * perCube);
         const meshVerts: number[] = [];
         const meshIndices: number[] = [];
+        const meshUVs: number[] = [];
         for(let x = 0; x < 16; x++) {
             for(let y = 0; y < 16; y++) {
                 for(let z = 0; z < 16; z++) {
@@ -308,6 +329,7 @@ export class VChunk {
         }
         this.meshVerts = new Float32Array(meshVerts);
         this.meshIndices = new Uint16Array(meshIndices);
+        this.meshUVs = new Float32Array(meshUVs);
         this.meshDirty = false;
     }
 

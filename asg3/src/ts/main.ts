@@ -45,6 +45,7 @@ async function main() {
     const glStuff: MyGlStuff = {gl, programInfo, buffers: buffersInfo};
     const atlas = atlasImages(await imagesPromise);
     // TODO temp debug thing
+    // @ts-expect-error
     document.body.appendChild(atlas.image);
     // setupUI();
     const world = await setupWorld();
@@ -80,7 +81,7 @@ function setupWebGL(gl: WebGLRenderingContext) {
 
 type MyProgramInfo = {
     program: WebGLProgram;
-    vars: ProgramVarLocations<['a_Position'], ['u_FragColor', 'u_ModelMat', 'u_BlockPos']>;
+    vars: ProgramVarLocations<['a_Position', 'a_UV'], ['u_FragColor', 'u_ModelMat', 'u_BlockPos']>;
 };
 
 async function setupShaders(gl: WebGLRenderingContext): Promise<MyProgramInfo> {
@@ -90,7 +91,7 @@ async function setupShaders(gl: WebGLRenderingContext): Promise<MyProgramInfo> {
     gl.useProgram(program);
     return {
         program: program,
-        vars: getProgramVarLocations(gl, program, ['a_Position'] as const, ['u_FragColor', 'u_ModelMat', 'u_BlockPos'] as const),
+        vars: getProgramVarLocations(gl, program, ['a_Position', 'a_UV'] as const, ['u_FragColor', 'u_ModelMat', 'u_BlockPos'] as const),
     };
 }
 
@@ -106,6 +107,12 @@ function setupBuffers(gl: WebGLRenderingContext, programInfo: MyProgramInfo): My
     if(programInfo.vars.attribLocations.a_Position !== null) {
         gl.enableVertexAttribArray(programInfo.vars.attribLocations.a_Position);
         gl.vertexAttribPointer(programInfo.vars.attribLocations.a_Position, 3, gl.FLOAT, false, 0, 0);
+    }
+    const uvs = gl.createBuffer();
+    assert(uvs !== null);
+    if(programInfo.vars.attribLocations.a_UV !== null) {
+        gl.enableVertexAttribArray(programInfo.vars.attribLocations.a_UV);
+        gl.vertexAttribPointer(programInfo.vars.attribLocations.a_UV, 2, gl.FLOAT, false, 0, 0);
     }
     const indices = gl.createBuffer();
     assert(indices !== null);

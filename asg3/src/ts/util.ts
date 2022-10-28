@@ -121,3 +121,8 @@ export function setMap<T, U>(set: Set<T>, func: (value: T, set: Set<T>) => U): S
     for(const el of set) newSet.add(func(el, set));
     return newSet;
 }
+
+export function isPow2(n: number): boolean {
+    // TODO probably better to do this a bit fiddly way instead?
+    return Math.log2(n) % 1 === 0;
+}

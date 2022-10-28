@@ -1,4 +1,4 @@
-import { assert, setFind, setMap } from "./util.js";
+import { assert, isPow2, setFind, setMap } from "./util.js";
 
 function loadImgFromPath(path: string): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
@@ -28,7 +28,7 @@ export type TextureAtlasInfo = {
 };
 
 /** debug switch, draw internal state of atlasing algorithm to atlas image */
-const drawFreeRects = true;
+const drawFreeRects = false;
 
 /** whether a and b overlap */
 function overlaps(a: DOMRectReadOnly, b: DOMRectReadOnly): boolean {
@@ -50,9 +50,20 @@ function addIIFNotDegenerate(set: Set<DOMRectReadOnly>, r: DOMRectReadOnly) {
     if(!isDegenerate(r)) set.add(r);
 }
 
-export function atlasImages(images: (readonly [name: string, img: HTMLImageElement])[]): TextureAtlasInfo {
-    let atlasSize: number = 128;
+type AtlasBuilderInput = (readonly [name: string, img: HTMLImageElement])[];
 
+export function atlasImages(images: AtlasBuilderInput, initialAtlasSize: number = 128): TextureAtlasInfo {
+    let atlasSize: number = initialAtlasSize;
+    let ret: TextureAtlasInfo | null;
+    while((ret = atlasImages_(images, atlasSize)) === null) {
+        console.warn(`${atlasSize}x${atlasSize} atlas was too small to store all of the provided textures, trying the next size up.`);
+        atlasSize *= 2;
+    }
+    return ret;
+}
+
+function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtlasInfo | null {
+    assert(isPow2(atlasSize), 'texture atlas dimension must be a power of 2');
     // setup initial free rectangles
     // DOMRectReadOnly already has everything we need, so might as well just use that instead of writing our
     // own rect stuff
@@ -70,25 +81,8 @@ export function atlasImages(images: (readonly [name: string, img: HTMLImageEleme
     for(const [name, img] of images) {
         const imgRect = new DOMRectReadOnly(0, 0, img.width, img.height);
         // " Decide the free rectangle F_i to pack the rectangle R into
-        let chosenFreeRect: DOMRectReadOnly | undefined;
-        // resize as needed until we have space for the texture
-        // this probably isn't the optimal method with this algorithm but it works well enough
-        while((chosenFreeRect = setFind(freeRects, r => fitsIn(imgRect, r))) === undefined) {
-            // grow into next pow 2 size, still leaving space for mipmap
-            // (this part was added by me, not part of the original algorithm afaik)
-            // move the existing free rects to what will be the bottom right of the new atlas
-            freeRects = setMap(freeRects, rect => new DOMRectReadOnly(rect.x + atlasSize, rect.y + atlasSize, rect.width, rect.height));
-            // do the same for the textures we've already packed
-            packedRects = packedRects.map(  ([name, img, rect]) => [name, img, new DOMRectReadOnly(rect.x + atlasSize, rect.y + atlasSize, rect.width, rect.height)]);
-            // add a free rect where the old reserved mipmap area was
-            freeRects.add(new DOMRectReadOnly(atlasSize, atlasSize, atlasSize / 2, atlasSize / 2));
-            // add free rects for the 2 new free areas we get from resizing
-            // (but not the third one since it's the new reserved mipmap area)
-            freeRects.add(new DOMRectReadOnly(0, atlasSize, atlasSize, atlasSize));
-            freeRects.add(new DOMRectReadOnly(atlasSize, 0, atlasSize, atlasSize));
-            // update the atlas size variable
-            atlasSize *= 2;
-        }
+        const chosenFreeRect = setFind(freeRects,  r => fitsIn(imgRect, r));
+        if(chosenFreeRect === undefined) return null;
         // " Decide the orientation for the rectangle and place it at the bottom-left of F_i
         // (here I've adjusted it to use top left)
         // " Denote by B the bounding box of R in the bin after it has been positioned

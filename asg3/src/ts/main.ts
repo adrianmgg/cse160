@@ -43,7 +43,7 @@ async function main() {
     const programInfo = await setupShaders(gl);
     const buffersInfo = setupBuffers(gl, programInfo);
     const glStuff: MyGlStuff = {gl, programInfo, buffers: buffersInfo};
-    const atlas = atlasImages(await imagesPromise);
+    const atlas = atlasImages(await imagesPromise, 64);
     // TODO temp debug thing
     // @ts-expect-error
     document.body.appendChild(atlas.image);

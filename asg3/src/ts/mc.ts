@@ -280,7 +280,9 @@ export class VChunk {
         4, 7, 6, 4, 6, 5, // back
     ] as const;
 
-    // TODO can i make this async?
+    // TODO can i make this async? also should i?
+    //      actually if something becomes async it should probably be the chunk/world rebuild funcs,
+    //       probably better to keep the individual vchunk meshing synchronous
     private buildMesh() {
         // TODO super unoptimized mesh building for now, just to make sure this all works
         // const perCube = /* quads per cube */ 6 /* tris per quad */ * 2 /* verts per tri */ * 3 /* data-s per vert */ * 3;

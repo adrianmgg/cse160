@@ -1,6 +1,7 @@
 
 export function assert(condition: boolean, message?: string): asserts condition {
     if(!condition) {
+        debugger;
         let errMsg = 'assertion failed';
         if(message !== null) errMsg += ` - ${message}`;
         throw new Error(errMsg);
@@ -8,9 +9,8 @@ export function assert(condition: boolean, message?: string): asserts condition 
 }
 
 /**
- * similar to {@link assert}, but:
- * - not enabled in production
- * - triggers the debugger when there's an error
+ * similar to {@link assert}, but not enabled in production
+ * (TODO: need to actually implement that lol)
  */
 export function debugAssert(condition: boolean, message?: string): asserts condition {
     // TODO have debug toggle
@@ -23,6 +23,7 @@ export function debugAssert(condition: boolean, message?: string): asserts condi
 }
 
 // TODO give this a better name
+// TODO wait couldn't i just put the code that's using this in the func of a promise constructor instead?
 export function promiseResolveReject<T>(): [Promise<T>, (value: T | PromiseLike<T>) => void,  (reason?: any) => void] {
     let resolve: null | ((value: T | PromiseLike<T>) => void) = null;
     let reject: null | ((reason?: any) => void) = null;
@@ -102,4 +103,11 @@ export function warnRateLimited(...data: any[]) {
         console.warn(`silenced ${SUBSEQUENT_SILENCEDWARN_CHUNK_SIZE} more warnings`);
     }
     warnCount += 1;
+}
+
+export function setFind<T>(set: Set<T>, predicate: (v: T) => boolean): T | undefined {
+    for(const x of set) {
+        if(predicate(x)) return x;
+    }
+    return undefined;
 }

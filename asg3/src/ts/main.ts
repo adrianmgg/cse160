@@ -1,6 +1,7 @@
 import { Camera, Mesh, Vec } from './3d.js';
 import { getProgramVarLocations, loadProgramFromFiles, ProgramVarLocations } from './gl.js';
 import { MCWorld } from './mc.js';
+import { atlasImages, loadImages, TextureAtlasInfo } from './texture.js';
 import { assert } from "./util.js";
 
 /*
@@ -31,18 +32,32 @@ export type MyStuff = {
     glStuff: MyGlStuff;
     world: MCWorld;
     camera: Camera;
+    atlas: TextureAtlasInfo;
 };
 
 async function main() {
+    // start the images loading as early as possible, we'll await this later once we need them
+    const imagesPromise = loadImages(['bedrock', 'cobblestone', 'dirt', 'grass_top', 'stone']);
     const gl = initWebGL();
     setupWebGL(gl);
     const programInfo = await setupShaders(gl);
     const buffersInfo = setupBuffers(gl, programInfo);
     const glStuff: MyGlStuff = {gl, programInfo, buffers: buffersInfo};
+    const atlas = atlasImages(await imagesPromise);
+    // TODO temp debug thing
+    document.body.appendChild(atlas.image);
     // setupUI();
     const world = await setupWorld();
     const camera = new Camera();
-    const stuff: MyStuff = {glStuff, camera, world};
+    const stuff: MyStuff = {glStuff, camera, world, atlas};
+
+    // TODO move this elsewhere
+    {
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas.image);
+    }
+
     // store these on the global scope. purely for easier debugging, none of our code will use it
     // @ts-expect-error
     window.mcStuff = stuff;
@@ -114,7 +129,10 @@ function tick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     stuff.camera.gaze = stuff.camera.gaze.div(stuff.camera.gaze.magnitude());
     stuff.camera.pos.y += 20;
 
-    // TODO temp
+    // 
+
+    // render
+    // TODO buffer stuff here for now, should move
     const { glStuff: { gl, programInfo: { vars: { uniformLocations: { u_ModelMat } } } } } = stuff;
     gl.bufferData(gl.ARRAY_BUFFER, Mesh.UNIT_CUBE.verts, gl.STATIC_DRAW);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Mesh.UNIT_CUBE.indices, gl.STATIC_DRAW);

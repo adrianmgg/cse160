@@ -28,7 +28,7 @@ export type TextureAtlasInfo = {
 };
 
 /** debug switch, draw internal state of atlasing algorithm to atlas image */
-const drawFreeRects = false;
+const drawFreeRects = true;
 
 /** whether a and b overlap */
 function overlaps(a: DOMRectReadOnly, b: DOMRectReadOnly): boolean {
@@ -62,6 +62,8 @@ export function atlasImages(images: AtlasBuilderInput, initialAtlasSize: number 
     return ret;
 }
 
+const ATLAS_PADDING = 1;
+
 function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtlasInfo | null {
     assert(isPow2(atlasSize), 'texture atlas dimension must be a power of 2');
     // setup initial free rectangles
@@ -70,7 +72,7 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
     // const freeRects: DOMRectReadOnly[] = [];
     let freeRects: Set<DOMRectReadOnly> = new Set();
     // excluding the 0,0 corner's quarter from the start so i can use that area for the mip map
-    freeRects.add(new DOMRectReadOnly(0, atlasSize / 2, atlasSize / 2, atlasSize / 2));
+    freeRects.add(new DOMRectReadOnly(0, atlasSize / 2, atlasSize, atlasSize / 2));
     freeRects.add(new DOMRectReadOnly(atlasSize / 2, 0, atlasSize / 2, atlasSize));
 
     //
@@ -79,7 +81,8 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
     // pack our images
     // TODO cite ("a thousand ways wto pack the bin", Algorithm 3: The Maximal Rectangles algorithm.)
     for(const [name, img] of images) {
-        const imgRect = new DOMRectReadOnly(0, 0, img.width, img.height);
+        // const imgRect = new DOMRectReadOnly(0, 0, img.width, img.height);
+        const imgRect = new DOMRectReadOnly(0, 0, img.width + ATLAS_PADDING * 2, img.height + ATLAS_PADDING * 2);
         // " Decide the free rectangle F_i to pack the rectangle R into
         const chosenFreeRect = setFind(freeRects,  r => fitsIn(imgRect, r));
         if(chosenFreeRect === undefined) return null;
@@ -141,13 +144,22 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
     const atlasCtx = atlasCanvas.getContext('2d');
     assert(atlasCtx !== null);
 
-    // atlasCtx.fillStyle = '#000';
-    // atlasCtx.fillRect(0, 0, atlasSize, atlasSize);
+    atlasCtx.fillStyle = '#0F0';
+    atlasCtx.fillRect(0, 0, atlasSize, atlasSize);
 
     // draw the textures
     for(const [name, tex, rect] of packedRects) {
+        const unpadded = new DOMRectReadOnly(rect.x + ATLAS_PADDING, rect.y + ATLAS_PADDING, rect.width - ATLAS_PADDING * 2, rect.height - ATLAS_PADDING * 2);
         // draw the full size
-        atlasCtx.drawImage(tex, rect.x, rect.y);
+        atlasCtx.drawImage(tex, unpadded.x - 1, unpadded.y - 1);
+        atlasCtx.drawImage(tex, unpadded.x + 1, unpadded.y - 1);
+        atlasCtx.drawImage(tex, unpadded.x + 1, unpadded.y + 1);
+        atlasCtx.drawImage(tex, unpadded.x - 1, unpadded.y + 1);
+        atlasCtx.drawImage(tex, unpadded.x + 1, unpadded.y    );
+        atlasCtx.drawImage(tex, unpadded.x - 1, unpadded.y    );
+        atlasCtx.drawImage(tex, unpadded.x    , unpadded.y + 1);
+        atlasCtx.drawImage(tex, unpadded.x    , unpadded.y - 1);
+        atlasCtx.drawImage(tex, unpadded.x, unpadded.y);
         // draw the mipmaps
         // TODO how will this handle non power-of-2 dimensioned textures? probably wrong so might need to require that
         for(let s = 2; s <= tex.width && s <= tex.height; s *= 2) {
@@ -167,7 +179,7 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
             atlasCtx.fillRect(r.x, r.y, r.width, r.height);
         }
         for(const [r, rgb] of abc){
-            atlasCtx.strokeStyle = `rgba(${rgb}, 1)`;
+            atlasCtx.strokeStyle = `rgba(${rgb}, .5)`;
             atlasCtx.lineWidth = 1;
             atlasCtx.strokeRect(r.x + .5, r.y + .5, r.width - 1, r.height - 1);
         }
@@ -175,7 +187,7 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
 
     const texturePositions = Object.fromEntries(packedRects.map(([name, tex, r]) => [
         name,
-        new DOMRectReadOnly(r.x / atlasSize, r.y / atlasSize, r.width / atlasSize, r.height / atlasSize)
+        new DOMRectReadOnly((r.x + ATLAS_PADDING) / atlasSize, (r.y + ATLAS_PADDING) / atlasSize, (r.width - ATLAS_PADDING * 2) / atlasSize, (r.height - ATLAS_PADDING * 2) / atlasSize)
     ] as const));
 
     return {image: atlasCanvas, texturePositions};

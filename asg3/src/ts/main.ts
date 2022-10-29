@@ -24,7 +24,6 @@ general overview of TODO stuff
 export type MyGlStuff = {
     gl: WebGLRenderingContext;
     programInfo: MyProgramInfo;
-    buffers: MyBuffersInfo;
 };
 
 // TODO give this a better name
@@ -37,13 +36,14 @@ export type MyStuff = {
 
 async function main() {
     // start the images loading as early as possible, we'll await this later once we need them
-    const imagesPromise = loadImages(['bedrock', 'cobblestone', 'dirt', 'grass_top', 'stone']);
+    const imagesPromise = loadImages(['bedrock', 'cobblestone', 'dirt', 'grass_top', 'grass_side', 'stone']);
+    // const imagesPromise = loadImages([]);
     const gl = initWebGL();
     setupWebGL(gl);
     const programInfo = await setupShaders(gl);
-    const buffersInfo = setupBuffers(gl, programInfo);
-    const glStuff: MyGlStuff = {gl, programInfo, buffers: buffersInfo};
+    const glStuff: MyGlStuff = {gl, programInfo};
     const atlas = atlasImages(await imagesPromise, 64);
+    setupTextures(atlas, glStuff);
     // TODO temp debug thing
     // @ts-expect-error
     document.body.appendChild(atlas.image);
@@ -51,13 +51,6 @@ async function main() {
     const world = await setupWorld();
     const camera = new Camera();
     const stuff: MyStuff = {glStuff, camera, world, atlas};
-
-    // TODO move this elsewhere
-    {
-        const texture = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas.image);
-    }
 
     // store these on the global scope. purely for easier debugging, none of our code will use it
     // @ts-expect-error
@@ -69,7 +62,7 @@ function initWebGL(): WebGLRenderingContext {
     const canvas = document.getElementById('canvas');
     assert(canvas !== null);
     assert(canvas instanceof HTMLCanvasElement);
-    const gl = canvas.getContext('webgl');
+    const gl = canvas.getContext('webgl', {antialias: false});
     assert(gl !== null);
     return gl;
 }
@@ -81,7 +74,7 @@ function setupWebGL(gl: WebGLRenderingContext) {
 
 type MyProgramInfo = {
     program: WebGLProgram;
-    vars: ProgramVarLocations<['a_Position', 'a_UV'], ['u_FragColor', 'u_ModelMat', 'u_BlockPos']>;
+    vars: ProgramVarLocations<['a_Position', 'a_UV'], ['u_FragColor', 'u_CameraMat', 'u_BlockPos', 'u_TextureAtlas', 'u_CameraPos']>;
 };
 
 async function setupShaders(gl: WebGLRenderingContext): Promise<MyProgramInfo> {
@@ -91,33 +84,24 @@ async function setupShaders(gl: WebGLRenderingContext): Promise<MyProgramInfo> {
     gl.useProgram(program);
     return {
         program: program,
-        vars: getProgramVarLocations(gl, program, ['a_Position', 'a_UV'] as const, ['u_FragColor', 'u_ModelMat', 'u_BlockPos'] as const),
+        vars: getProgramVarLocations(gl, program, ['a_Position', 'a_UV'] as const, ['u_FragColor', 'u_CameraMat', 'u_BlockPos', 'u_TextureAtlas', 'u_CameraPos'] as const),
     };
 }
 
-type MyBuffersInfo = {
-    vertices: WebGLBuffer;
-    indices: WebGLBuffer;
-};
-
-function setupBuffers(gl: WebGLRenderingContext, programInfo: MyProgramInfo): MyBuffersInfo {
-    const vertices = gl.createBuffer();
-    assert(vertices !== null);
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertices);
-    if(programInfo.vars.attribLocations.a_Position !== null) {
-        gl.enableVertexAttribArray(programInfo.vars.attribLocations.a_Position);
-        gl.vertexAttribPointer(programInfo.vars.attribLocations.a_Position, 3, gl.FLOAT, false, 0, 0);
-    }
-    const uvs = gl.createBuffer();
-    assert(uvs !== null);
-    if(programInfo.vars.attribLocations.a_UV !== null) {
-        gl.enableVertexAttribArray(programInfo.vars.attribLocations.a_UV);
-        gl.vertexAttribPointer(programInfo.vars.attribLocations.a_UV, 2, gl.FLOAT, false, 0, 0);
-    }
-    const indices = gl.createBuffer();
-    assert(indices !== null);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
-    return {vertices, indices};
+function setupTextures(atlas: TextureAtlasInfo, { gl, programInfo: { vars: { uniformLocations: { u_TextureAtlas } } } }: MyGlStuff) {
+    const texture = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas.image);
+    // nearest neighbor for magnification
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    // nearest neighbor for minification (with NO mip maps, since we handle those ourselves)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    // clamp texture at edges
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    //
+    gl.uniform1i(u_TextureAtlas, 0);
 }
 
 async function setupWorld(): Promise<MCWorld> {
@@ -129,22 +113,33 @@ function tick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
 
     // stuff.camera.gaze = Vec.fromCylindrical(1, now / 1000, 0);
     // stuff.camera.pos = Vec.of(10, 0, 10);
+
     stuff.camera.pos = Vec.fromCylindrical(20, now / 1000, 20);
+    // stuff.camera.pos = Vec.fromCylindrical(12, now / 1000, 20);
     stuff.camera.pos.x += 8;
     stuff.camera.pos.z += 8;
     stuff.camera.gazeTowards(Vec.of(8, 0, 8));
-    stuff.camera.gaze = stuff.camera.gaze.div(stuff.camera.gaze.magnitude());
+    // stuff.camera.gaze = stuff.camera.gaze.div(stuff.camera.gaze.magnitude());
     stuff.camera.pos.y += 20;
+
+    // stuff.camera.pos = Vec.of(8, 51, 8);
+    // stuff.camera.gaze = Vec.DOWN;
+    // stuff.camera.up = Vec.FORWARDS;
+    // stuff.camera.up = Vec.fromCylindrical(1, Math.floor(now / 250) / 2 / 2 / 2 * Math.PI, 0);
+
 
     // 
 
     // render
-    // TODO buffer stuff here for now, should move
-    const { glStuff: { gl, programInfo: { vars: { uniformLocations: { u_ModelMat } } } } } = stuff;
-    gl.bufferData(gl.ARRAY_BUFFER, Mesh.UNIT_CUBE.verts, gl.STATIC_DRAW);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Mesh.UNIT_CUBE.indices, gl.STATIC_DRAW);
+    stuff.world.rebuildMeshes(stuff);
 
-    gl.uniformMatrix4fv(u_ModelMat, false, stuff.camera.world2viewMat().data);
+    // TODO buffer stuff here for now, should move
+    const { glStuff: { gl, programInfo: { vars: { uniformLocations: { u_CameraMat, u_CameraPos } } } } } = stuff;
+    // gl.bufferData(gl.ARRAY_BUFFER, Mesh.UNIT_CUBE.verts, gl.STATIC_DRAW);
+    // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Mesh.UNIT_CUBE.indices, gl.STATIC_DRAW);
+
+    gl.uniform3f(u_CameraPos, ...stuff.camera.pos.xyz());
+    gl.uniformMatrix4fv(u_CameraMat, false, stuff.camera.world2viewMat().data);
 
     stuff.world.render(stuff.glStuff);
 
@@ -157,3 +152,4 @@ function clearCanvas({ gl }: MyGlStuff) {
     gl.clearColor(.8, .8, .8, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 }
+

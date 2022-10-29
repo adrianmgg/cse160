@@ -398,82 +398,82 @@ export class Camera {
     }
 }
 
-export class Bone implements Renderable {
-    mat: Mat4x4;
-    /** second matrix, for ease of animation */
-    animMat: Mat4x4 | null;
-    length: number;
-    /** children attached to the root of the bone */
-    headChildren: Renderable[];
-    /** children attached to the end of the bone */
-    tailChildren: Renderable[];
-    name: string;
-    constructor(mat: Mat4x4, length: number, name: string) {
-        this.mat = mat;
-        this.animMat = null;
-        this.length = length;
-        this.headChildren = [];
-        this.tailChildren = [];
-        this.name = name;
-    }
+// export class Bone implements Renderable {
+//     mat: Mat4x4;
+//     /** second matrix, for ease of animation */
+//     animMat: Mat4x4 | null;
+//     length: number;
+//     /** children attached to the root of the bone */
+//     headChildren: Renderable[];
+//     /** children attached to the end of the bone */
+//     tailChildren: Renderable[];
+//     name: string;
+//     constructor(mat: Mat4x4, length: number, name: string) {
+//         this.mat = mat;
+//         this.animMat = null;
+//         this.length = length;
+//         this.headChildren = [];
+//         this.tailChildren = [];
+//         this.name = name;
+//     }
 
-    resetAnimMatsRecursive() {
-        if(this.animMat !== null) this.animMat.identityInPlace();
-        for(const child of this.headChildren) {
-            if(child instanceof Bone) child.resetAnimMatsRecursive();
-        }
-        for(const child of this.tailChildren) {
-            if(child instanceof Bone) child.resetAnimMatsRecursive();
-        }
-    }
+//     resetAnimMatsRecursive() {
+//         if(this.animMat !== null) this.animMat.identityInPlace();
+//         for(const child of this.headChildren) {
+//             if(child instanceof Bone) child.resetAnimMatsRecursive();
+//         }
+//         for(const child of this.tailChildren) {
+//             if(child instanceof Bone) child.resetAnimMatsRecursive();
+//         }
+//     }
 
-    // TODO maybe add a LINES option for meshes? or smth like that
-    private static BONE_DISPLAY_POINTS = new Float32Array([
-        // simple view, just a line:
-        // 0, 0, 0,
-        // 0, 1, 0,
-        // more complex one, based on blender's "octahedral" armature viewport display option
-        0, 0, 0,   .1, .1,  .1,     .1, .1,  .1,  0, 1, 0,
-        0, 0, 0,  -.1, .1,  .1,    -.1, .1,  .1,  0, 1, 0,
-        0, 0, 0,   .1, .1, -.1,     .1, .1, -.1,  0, 1, 0,
-        0, 0, 0,  -.1, .1, -.1,    -.1, .1, -.1,  0, 1, 0,
-         .1, .1,  .1,   -.1, .1,  .1,
-        -.1, .1,  .1,   -.1, .1, -.1,
-        -.1, .1, -.1,    .1, .1, -.1,
-         .1, .1, -.1,    .1, .1,  .1,
-    ]);
+//     // TODO maybe add a LINES option for meshes? or smth like that
+//     private static BONE_DISPLAY_POINTS = new Float32Array([
+//         // simple view, just a line:
+//         // 0, 0, 0,
+//         // 0, 1, 0,
+//         // more complex one, based on blender's "octahedral" armature viewport display option
+//         0, 0, 0,   .1, .1,  .1,     .1, .1,  .1,  0, 1, 0,
+//         0, 0, 0,  -.1, .1,  .1,    -.1, .1,  .1,  0, 1, 0,
+//         0, 0, 0,   .1, .1, -.1,     .1, .1, -.1,  0, 1, 0,
+//         0, 0, 0,  -.1, .1, -.1,    -.1, .1, -.1,  0, 1, 0,
+//          .1, .1,  .1,   -.1, .1,  .1,
+//         -.1, .1,  .1,   -.1, .1, -.1,
+//         -.1, .1, -.1,    .1, .1, -.1,
+//          .1, .1, -.1,    .1, .1,  .1,
+//     ]);
 
-    // TODO finish porting
-    render(stuff: MyGlStuff, mat: Mat4x4) {
-        const { gl, programInfo: { vars: { uniformLocations: { u_FragColor, u_ModelMat }, attribLocations: { a_Position } } } } = stuff;
-        let baseMat = this.mat;
-        if(this.animMat !== null) baseMat = baseMat.matmul(this.animMat);
-        // TODO show bones toggle
-        // if(showBones) {
-        //     const showBoneMat = mat.matmul(baseMat.scale(this.length, this.length, this.length));
-        //     gl.bufferData(gl.ARRAY_BUFFER, Bone.BONE_DISPLAY_POINTS, gl.STATIC_DRAW);
-        //     if(a_Position !== null) {
-        //         gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
-        //         gl.enableVertexAttribArray(a_Position);
-        //     }
-        //     gl.uniformMatrix4fv(u_ModelMat, false, showBoneMat.data);
-        //     if(u_FragColor !== null) gl.uniform4f(u_FragColor, 1, 0, 0, 1);
-        //     // adjust depth range so we render on top
-        //     gl.depthRange(0, 0.01);
-        //     gl.drawArrays(gl.LINE_STRIP, 0, Bone.BONE_DISPLAY_POINTS.length / 3);
-        //     // TODO this depthRange fiddling stuff should probably move somewhere else
-        //     gl.depthRange(0.01, 1.0);
-        // }
-        if(this.headChildren.length > 0) {
-            const headMat = mat.matmul(baseMat);
-            for(const child of this.headChildren) child.render(stuff, headMat);
-        }
-        if(this.tailChildren.length > 0) {
-            const tailMat = mat.matmul(baseMat.translate(0, this.length, 0));
-            for(const child of this.tailChildren) child.render(stuff, tailMat);
-        }
-    }
-}
+//     // TODO finish porting
+//     render(stuff: MyGlStuff, mat: Mat4x4) {
+//         const { gl, programInfo: { vars: { uniformLocations: { u_FragColor, u_ModelMat }, attribLocations: { a_Position } } } } = stuff;
+//         let baseMat = this.mat;
+//         if(this.animMat !== null) baseMat = baseMat.matmul(this.animMat);
+//         // TODO show bones toggle
+//         // if(showBones) {
+//         //     const showBoneMat = mat.matmul(baseMat.scale(this.length, this.length, this.length));
+//         //     gl.bufferData(gl.ARRAY_BUFFER, Bone.BONE_DISPLAY_POINTS, gl.STATIC_DRAW);
+//         //     if(a_Position !== null) {
+//         //         gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+//         //         gl.enableVertexAttribArray(a_Position);
+//         //     }
+//         //     gl.uniformMatrix4fv(u_ModelMat, false, showBoneMat.data);
+//         //     if(u_FragColor !== null) gl.uniform4f(u_FragColor, 1, 0, 0, 1);
+//         //     // adjust depth range so we render on top
+//         //     gl.depthRange(0, 0.01);
+//         //     gl.drawArrays(gl.LINE_STRIP, 0, Bone.BONE_DISPLAY_POINTS.length / 3);
+//         //     // TODO this depthRange fiddling stuff should probably move somewhere else
+//         //     gl.depthRange(0.01, 1.0);
+//         // }
+//         if(this.headChildren.length > 0) {
+//             const headMat = mat.matmul(baseMat);
+//             for(const child of this.headChildren) child.render(stuff, headMat);
+//         }
+//         if(this.tailChildren.length > 0) {
+//             const tailMat = mat.matmul(baseMat.translate(0, this.length, 0));
+//             for(const child of this.tailChildren) child.render(stuff, tailMat);
+//         }
+//     }
+// }
 
 export class Mesh {
     readonly verts: Float32Array;
@@ -595,33 +595,33 @@ export class Color {
     }
 }
 
-export class Model implements Renderable {
-    mesh: Mesh;
-    mat: Mat4x4;
-    color: Color;
-    constructor(mesh: Mesh, mat?: Mat4x4, color?: Color) {
-        this.mesh = mesh;
-        this.mat = mat !== undefined ? mat : Mat4x4.identity();
-        this.color = color !== undefined ? color : new Color(0, 0, 0, 1);
-    }
+// export class Model implements Renderable {
+//     mesh: Mesh;
+//     mat: Mat4x4;
+//     color: Color;
+//     constructor(mesh: Mesh, mat?: Mat4x4, color?: Color) {
+//         this.mesh = mesh;
+//         this.mat = mat !== undefined ? mat : Mat4x4.identity();
+//         this.color = color !== undefined ? color : new Color(0, 0, 0, 1);
+//     }
 
-    render(stuff: MyGlStuff, mat:Mat4x4) {
-        const { gl, programInfo: { vars: { uniformLocations: { u_FragColor, u_ModelMat } } } } = stuff;
-        const newMat = mat.matmul(this.mat);
-        gl.bufferData(gl.ARRAY_BUFFER, this.mesh.verts, gl.STATIC_DRAW);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.mesh.indices, gl.STATIC_DRAW);
-        gl.uniformMatrix4fv(u_ModelMat, false, newMat.data);
-        // color
-        if(u_FragColor !== null) gl.uniform4f(u_FragColor, this.color.r, this.color.g, this.color.b, this.color.a);
-        // draw mesh
-        gl.drawElements(gl.TRIANGLES, this.mesh.indices.length, gl.UNSIGNED_SHORT, 0);
-        // // kinda janky (temporary) wireframe drawing
-        // gl.uniform4f(u_FragColor, 0, 0, 1, 1);
-        // for(let i = 0; i + 2 < this.mesh.verts.length; i += 3) {
-        //     gl.drawElements(gl.LINE_LOOP, 3, gl.UNSIGNED_SHORT, i * 2);
-        // }
-    }
-}
+//     render(stuff: MyGlStuff, mat:Mat4x4) {
+//         const { gl, programInfo: { vars: { uniformLocations: { u_FragColor, u_ModelMat } } } } = stuff;
+//         const newMat = mat.matmul(this.mat);
+//         gl.bufferData(gl.ARRAY_BUFFER, this.mesh.verts, gl.STATIC_DRAW);
+//         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.mesh.indices, gl.STATIC_DRAW);
+//         gl.uniformMatrix4fv(u_ModelMat, false, newMat.data);
+//         // color
+//         if(u_FragColor !== null) gl.uniform4f(u_FragColor, this.color.r, this.color.g, this.color.b, this.color.a);
+//         // draw mesh
+//         gl.drawElements(gl.TRIANGLES, this.mesh.indices.length, gl.UNSIGNED_SHORT, 0);
+//         // // kinda janky (temporary) wireframe drawing
+//         // gl.uniform4f(u_FragColor, 0, 0, 1, 1);
+//         // for(let i = 0; i + 2 < this.mesh.verts.length; i += 3) {
+//         //     gl.drawElements(gl.LINE_LOOP, 3, gl.UNSIGNED_SHORT, i * 2);
+//         // }
+//     }
+// }
 
 
 

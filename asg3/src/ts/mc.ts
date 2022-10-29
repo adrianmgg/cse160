@@ -1,7 +1,8 @@
 import { idbOpen, idbRequest2Promise } from "./db.js";
 import { assert, debugAssert, Dict2D, NTupleOf, warnRateLimited } from "./util.js";
 import { Color, Mesh } from './3d.js';
-import type { MyGlStuff } from "./main.js";
+import type { MyGlStuff, MyStuff } from "./main.js";
+import type { TextureAtlasInfo } from "./texture.js";
 
 const MC_WORLD_IDB_VERSION = 1 as const;
 
@@ -21,16 +22,30 @@ export enum Block {
 // 7, 4, 3, 7, 3, 2, // down
 // 4, 7, 6, 4, 6, 5, // back
 
-enum CubeFace { FRONT, RIGHT, UP, LEFT, DOWN, BACK };
+enum CubeFace { FRONT = 0, RIGHT = 1, UP = 2, LEFT = 3, DOWN = 4, BACK = 5 };
 
 const BLOCK_TEXTURES: Record<Block, null | string | readonly [front: string, right: string, up: string, left: string, down: string, back: string]> = {
     [Block.AIR]:         null,
     [Block.STONE]:       'stone',
-    [Block.GRASS]:       ['grass_side', 'grass_side', 'grass', 'grass_side', 'dirt', 'grass_side'],
+    [Block.GRASS]:       ['grass_side', 'grass_side', 'grass_top', 'grass_side', 'dirt', 'grass_side'],
     [Block.DIRT]:        'dirt',
     [Block.COBBLESTONE]: 'cobblestone',
     [Block.BEDROCK]:     'bedrock',
 } as const;
+
+function _getTextureFor(block: Block, face: CubeFace, atlas: TextureAtlasInfo): DOMRectReadOnly | null {
+    const a = BLOCK_TEXTURES[block];
+    if(a === null) return null; // TODO avoid new here.
+    if(typeof a === 'string') {
+        return atlas.texturePositions[a] ?? null;
+    }
+    const b = a[face];
+    if(b === undefined) return null;
+    return atlas.texturePositions[b] ?? null;
+}
+function getTextureFor(block: Block, face: CubeFace, atlas: TextureAtlasInfo): DOMRectReadOnly {
+    return _getTextureFor(block, face, atlas) ?? new DOMRectReadOnly();
+}
 
 const block_colors: Record<Block, Color> = {
     [Block.AIR]:         Color.fromRGBHex(0xFFFFFF),
@@ -124,11 +139,13 @@ export class MCWorld {
         }
     }
 
-    render(stuff: MyGlStuff): void {
-        // TODO mesh rebuild loop should prob be elsewhere
+    rebuildMeshes(stuff: MyStuff) {
         for(const [chunk] of this.chunks) {
-            chunk.rebuildMeshes();
+            chunk.rebuildMeshes(stuff);
         }
+    }
+
+    render(stuff: MyGlStuff): void {
         for(const [chunk] of this.chunks) {
             chunk.render(stuff);
         }
@@ -215,9 +232,9 @@ export class Chunk {
         }
     }
 
-    rebuildMeshes() {
+    rebuildMeshes(stuff: MyStuff) {
         for(const [vChunk] of this.iterVChunks()) {
-            if(vChunk !== null) vChunk.rebuildMesh();
+            if(vChunk !== null) vChunk.rebuildMesh(stuff);
         }
     }
 
@@ -237,10 +254,12 @@ export class VChunk {
      * vertices of this vchunk's mesh. will be null when there is no mesh data, but a non-null value
      * does NOT imply that the mesh doesn't need recalculating. for that, see {@link meshDirty}
      */
-    private meshVerts: Float32Array | null;
-    private meshIndices: Uint16Array | null;
-    private meshUVs: Float32Array | null;
+    // TODO should move all this stuff into some kinda mesh buffer manager
+    private meshVerts: WebGLBuffer | null;
+    private meshIndices: WebGLBuffer | null;
+    private meshUVs: WebGLBuffer | null;
     private meshDirty: boolean;
+    private numIndices: number = 0;
 
     constructor(blockData: Uint8Array) {
         this.blockData = blockData;
@@ -261,6 +280,15 @@ export class VChunk {
         return this.blockData[VChunk.blockIdx(x, y, z)] as Block;
     }
 
+    hasBlockAt(x: number, y: number, z: number): boolean {
+        return (
+            // must be a valid index
+            (0 <= x && x < 16 && 0 <= y && y < 16 && 0 <= z && z < 16)
+            // must not be air there
+            && (this.getBlock(x, y, z) !== Block.AIR)
+        );
+    }
+
     setBlock(x: number, y: number, z: number, block: Block) {
         this.blockData[VChunk.blockIdx(x, y, z)] = block.valueOf();
     }
@@ -277,78 +305,177 @@ export class VChunk {
         return this.blockData;
     }
 
-    rebuildMesh() {
-        if(this.meshDirty) this.buildMesh();
+    rebuildMesh(stuff: MyStuff) {
+        if(this.meshDirty) this.buildMesh(stuff);
     }
 
-    private static readonly CUBE_VERTS: readonly (readonly [number, number, number])[] = [
-        [1, 1, 1],
-        [0, 1, 1],
-        [0, 0, 1],
-        [1, 0, 1],
-        [1, 0, 0],
-        [1, 1, 0],
-        [0, 1, 0],
-        [0, 0, 0],
-    ] as const;
-    private static readonly CUBE_INDICES: readonly number[] = [
-        0, 1, 2, 0, 2, 3, // front
-        0, 3, 4, 0, 4, 5, // right
-        0, 5, 6, 0, 6, 1, // up
-        1, 6, 7, 1, 7, 2, // left
-        7, 4, 3, 7, 3, 2, // down
-        4, 7, 6, 4, 6, 5, // back
-    ] as const;
+    // private static readonly CUBE_VERTS: readonly (readonly [number, number, number])[] = [
+    //     [1, 1, 1],
+    //     [0, 1, 1],
+    //     [0, 0, 1],
+    //     [1, 0, 1],
+    //     [1, 0, 0],
+    //     [1, 1, 0],
+    //     [0, 1, 0],
+    //     [0, 0, 0],
+    // ] as const;
+    // private static readonly CUBE_INDICES: readonly number[] = [
+    //     0, 1, 2, 0, 2, 3, // front
+    //     0, 3, 4, 0, 4, 5, // right
+    //     0, 5, 6, 0, 6, 1, // up
+    //     1, 6, 7, 1, 7, 2, // left
+    //     7, 4, 3, 7, 3, 2, // down
+    //     4, 7, 6, 4, 6, 5, // back
+    // ] as const;
+
+    private static readonly CUBE_FACE_OFFSETS: Record<CubeFace, readonly [number, number, number]> = {
+        [CubeFace.FRONT]: [ 0,  0,  1],
+        [CubeFace.RIGHT]: [ 1,  0,  0],
+        [CubeFace.UP]:    [ 0,  1,  0],
+        [CubeFace.LEFT]:  [-1,  0,  0],
+        [CubeFace.DOWN]:  [ 0, -1,  0],
+        [CubeFace.BACK]:  [ 0,  0, -1],
+    } as const;
+    private static readonly CUBE_FACE_VERTS: Record<CubeFace, readonly (readonly [number, number, number])[]> = {
+        [CubeFace.FRONT]: [[0,1,1], [1,1,1], [1,0,1], [0,0,1]],
+        [CubeFace.RIGHT]: [[1,1,0], [1,1,1], [1,0,1], [1,0,0]],
+        [CubeFace.UP]:    [[0,1,0], [0,1,1], [1,1,1], [1,1,0]],
+        [CubeFace.LEFT]:  [[0,1,0], [0,1,1], [0,0,1], [0,0,0]],
+        [CubeFace.DOWN]:  [[0,0,0], [0,0,1], [1,0,1], [1,0,0]],
+        [CubeFace.BACK]:  [[0,1,0], [1,1,0], [1,0,0], [0,0,0]],
+    } as const;
+    private static readonly CUBE_FACE_INDICES: Record<CubeFace, readonly (readonly [number, number, number])[]> = {
+        [CubeFace.FRONT]: [[0,2,1], [0,3,2]],
+        [CubeFace.RIGHT]: [[0,1,2], [0,2,3]],
+        [CubeFace.UP]:    [[0,1,2], [0,2,3]],
+        [CubeFace.LEFT]:  [[0,2,1], [0,3,2]],
+        [CubeFace.DOWN]:  [[0,2,1], [0,3,2]],
+        [CubeFace.BACK]:  [[0,1,2], [0,2,3]],
+    } as const;
 
     // TODO can i make this async? also should i?
     //      actually if something becomes async it should probably be the chunk/world rebuild funcs,
     //       probably better to keep the individual vchunk meshing synchronous
-    private buildMesh() {
+    private buildMesh(stuff: MyStuff) {
         // TODO super unoptimized mesh building for now, just to make sure this all works
         // const perCube = /* quads per cube */ 6 /* tris per quad */ * 2 /* verts per tri */ * 3 /* data-s per vert */ * 3;
         // const meshData = new Float32Array(/* length * width * height */ 16 * 16 * 16 /* data-s per cube */ * perCube);
         const meshVerts: number[] = [];
         const meshIndices: number[] = [];
         const meshUVs: number[] = [];
+        let elemIdx = 0;
         for(let x = 0; x < 16; x++) {
             for(let y = 0; y < 16; y++) {
                 for(let z = 0; z < 16; z++) {
                     const block = this.getBlock(x, y, z);
                     if(block === Block.AIR) continue;
-                    // lack of a -1 here is intentional, since what we want is the index immediately
-                    // after the current last element
-                    const baseIdx = meshVerts.length / 3;
-                    for(const vert of VChunk.CUBE_VERTS) {
-                        meshVerts.push(vert[0] + x, vert[1] + y, vert[2] + z);
-                    }
-                    for(const idx of VChunk.CUBE_INDICES) {
-                        meshIndices.push(idx + baseIdx);
+                    for(const face of [CubeFace.UP, CubeFace.DOWN, CubeFace.LEFT, CubeFace.RIGHT, CubeFace.FRONT, CubeFace.BACK]) {
+                        const [ox, oy, oz] = VChunk.CUBE_FACE_OFFSETS[face];
+                        if(this.hasBlockAt(x+ox, y+oy, z+oz)) continue;
+                        const faceVerts = VChunk.CUBE_FACE_VERTS[face];
+                        for(const [vx, vy, vz] of faceVerts) {
+                            meshVerts.push(x+vx, y+vy, z+vz);
+                        }
+                        for(const tri of VChunk.CUBE_FACE_INDICES[face]) {
+                            for(const idx of tri) meshIndices.push(elemIdx + idx);
+                        }
+                        elemIdx += faceVerts.length;
+                        const tex = getTextureFor(block, face, stuff.atlas);
+                        meshUVs.push(
+                            tex.left , tex.top   , 
+                            tex.right, tex.top   , 
+                            tex.right, tex.bottom, 
+                            tex.left , tex.bottom, 
+                        );
                     }
                 }
             }
         }
-        this.meshVerts = new Float32Array(meshVerts);
-        this.meshIndices = new Uint16Array(meshIndices);
-        this.meshUVs = new Float32Array(meshUVs);
+
+        this.deleteMesh(stuff);
+        const { glStuff: { gl, programInfo: { vars: { attribLocations: { a_Position } } } } } = stuff;
+
+        this.meshVerts = gl.createBuffer();
+        assert(this.meshVerts !== null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.meshVerts);
+        // TODO can this be STATIC_DRAW?
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshVerts), gl.STATIC_DRAW);
+        if(a_Position !== null) {
+            gl.enableVertexAttribArray(a_Position);
+            gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+        }
+
+        this.meshIndices = gl.createBuffer();
+        assert(this.meshIndices !== null);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(meshIndices), gl.STATIC_DRAW);
+        this.numIndices = meshIndices.length;
+
+        this.meshUVs = gl.createBuffer();
+        assert(this.meshUVs !== null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.meshUVs);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshUVs), gl.STATIC_DRAW);
+
+        // this.meshVerts = new Float32Array(meshVerts);
+        // this.meshIndices = new Uint16Array(meshIndices);
+        // this.meshUVs = new Float32Array(meshUVs);
         this.meshDirty = false;
+    }
+    
+    private deleteMesh(stuff: MyStuff) {
+        const { glStuff: { gl } } = stuff;
+        if(this.meshVerts !== null) {
+            gl.deleteBuffer(this.meshVerts);
+            this.meshVerts = null;
+        }
+        if(this.meshIndices !== null) {
+            gl.deleteBuffer(this.meshIndices);
+            this.meshIndices = null;
+        }
+        if(this.meshUVs !== null) {
+            gl.deleteBuffer(this.meshUVs);
+            this.meshUVs = null;
+        }
+        // this.meshDirty = true;
+    }
+
+    cleanup(stuff: MyStuff) {
+        this.deleteMesh(stuff);
     }
 
     render(stuff: MyGlStuff, chunkX: number, chunkY: number, chunkZ: number): void {
-        const { gl, programInfo: { vars: { uniformLocations: { u_BlockPos, u_FragColor }, attribLocations: { a_Position } } } } = stuff;
-        if(this.meshVerts !== null && this.meshIndices !== null) {
+        const { gl, programInfo: { vars: { uniformLocations: { u_BlockPos, u_FragColor }, attribLocations: { a_Position, a_UV } } } } = stuff;
+        if(this.meshVerts !== null && this.meshIndices !== null && this.meshUVs !== null) {
             // TODO is this how we should be doing it? or should we put the verts and indices into a
             // gl buffer when we calculate them and then change which buffer ARRAY_BUFFER has? gotta
             // read up on some more gl stuff or maybe ask in office hours
-            gl.bufferData(gl.ARRAY_BUFFER, this.meshVerts, gl.STATIC_DRAW);
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices, gl.STATIC_DRAW);
-            // our overall pos
+            // gl.bufferData(gl.ARRAY_BUFFER, this.meshVerts, gl.STATIC_DRAW);
+            // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices, gl.STATIC_DRAW);
+
+            // assert(a_Position !== null);
+            if(a_Position !== null) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.meshVerts);
+                gl.enableVertexAttribArray(a_Position);
+                gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+            }
+            if(a_UV !== null) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.meshUVs);
+                gl.enableVertexAttribArray(a_UV);
+                gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
+            }
+            // if(a_UV !== null) gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices);
+
             // TODO probably rename BlockPos to something more general like Offset or whatever
             // TODO should probably add helpers for setting these rather than doing the null check every single time
+            // our overall pos
             if(u_BlockPos !== null) gl.uniform3f(u_BlockPos, chunkX, chunkY, chunkZ);
+            // TODO remove this?
             if(u_FragColor !== null) gl.uniform4f(u_FragColor, (chunkX % 256) / 255, (chunkY % 256) / 255, (chunkZ % 256) / 255, 1.0);
+
             // render
-            gl.drawElements(gl.TRIANGLES, this.meshIndices.length, gl.UNSIGNED_SHORT, 0);
-            // gl.drawElements(gl.LINES, this.meshIndices.length, gl.UNSIGNED_SHORT, 0);
+            gl.drawElements(gl.TRIANGLES, this.numIndices, gl.UNSIGNED_SHORT, 0);
+            gl.drawElements(gl.LINES, this.numIndices, gl.UNSIGNED_SHORT, 0);
         } else {
             warnRateLimited(`skipping render of vchunk ${chunkX},${chunkY},${chunkZ} as it has no mesh`);
         }

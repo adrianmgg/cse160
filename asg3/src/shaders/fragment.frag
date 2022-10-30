@@ -2,13 +2,12 @@ precision mediump float;
 
 uniform vec4 u_FragColor;
 varying vec3 v_TempDebugColor;
-varying vec3 v_UV_camdist;
+varying vec2 v_UV;
 uniform sampler2D u_TextureAtlas;
 
 void main() {
     // gl_FragColor = u_FragColor;
-    vec2 uv = v_UV_camdist.xy;
-    float dist = v_UV_camdist.z;
+    vec2 uv = v_UV;
 
     // sample
     gl_FragColor = texture2D(u_TextureAtlas, uv);

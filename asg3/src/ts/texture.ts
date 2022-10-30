@@ -28,8 +28,11 @@ export type TextureAtlasInfo = {
     readonly mipImages: (readonly [mipLevel: number, image: TexImageSource])[];
 };
 
+// TODO factor these out to some settings thing, preferably one that can be changed at runtime
 /** debug switch, draw internal state of atlasing algorithm to atlas image */
-const drawFreeRects = true;
+const drawFreeRects = false;
+/** debug switch, colorize mipmap levels */
+const colorizeMipLevels = false;
 
 /** whether a and b overlap */
 function overlaps(a: DOMRectReadOnly, b: DOMRectReadOnly): boolean {
@@ -142,8 +145,8 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
     assert(atlasCtx !== null);
 
     const mipCanvases: (readonly [number, HTMLCanvasElement, CanvasRenderingContext2D])[] = [];
-    for(let i = 1; i <= 2+4; i++) {
-        const mipScale = Math.pow(2, i);
+    for(let mipLevel = 1; atlasSize / Math.pow(2, mipLevel) >= 1; mipLevel++) {
+        const mipScale = Math.pow(2, mipLevel);
         const mipSize = atlasSize / mipScale;
         assert(isPow2(mipSize));
         const canvas = document.createElement('canvas');
@@ -151,7 +154,7 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
         canvas.height = mipSize;
         const ctx = canvas.getContext('2d');
         assert(ctx !== null);
-        mipCanvases.push([i, canvas, ctx] as const);
+        mipCanvases.push([mipLevel, canvas, ctx] as const);
     }
 
     atlasCtx.fillStyle = '#000';
@@ -160,7 +163,7 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
     // draw the textures
     for(const [name, tex, rect] of packedRects) {
         // draw the full size
-        atlasCtx.drawImage(tex, rect.x, rect.y);
+        atlasCtx.drawImage(tex, rect.x, rect.y, rect.width, rect.height);
         // draw the mipmaps
         // TODO how will this handle non power-of-2 dimensioned textures? probably wrong so might need to require that
         // for(let s = 2; s <= tex.width && s <= tex.height; s *= 2) {
@@ -169,6 +172,13 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
         for(const [mipLevel, _, mipCtx] of mipCanvases) {
             const mipScale = Math.pow(2, mipLevel);
             mipCtx.drawImage(tex, rect.x / mipScale, rect.y / mipScale, rect.width / mipScale, rect.height / mipScale);
+        }
+    }
+
+    if(colorizeMipLevels) {
+        for(const [level, canvas, ctx] of mipCanvases) {
+            ctx.fillStyle = `hsla(${level / mipCanvases.length * 100 * 300}, 100%, 50%, 0.5)`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
     }
 

@@ -124,8 +124,8 @@ function tick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
 
     // stuff.camera.pos = Vec.of(8, 51, 8);
     // stuff.camera.gaze = Vec.DOWN;
-    // stuff.camera.up = Vec.FORWARDS;
-    // stuff.camera.up = Vec.fromCylindrical(1, Math.floor(now / 250) / 2 / 2 / 2 * Math.PI, 0);
+    // // stuff.camera.up = Vec.FORWARDS;
+    // stuff.camera.up = Vec.fromCylindrical(1, now / 1000, 0);
 
 
     // 

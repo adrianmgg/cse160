@@ -25,9 +25,7 @@ void main() {
     float mipFac = 1.;
     if      (dist < MIP_LEVEL1_START) mipFac =  1.;
     else if (dist < MIP_LEVEL2_START) mipFac =  2.;
-    else if (dist < MIP_LEVEL3_START) mipFac =  4.;
-    else if (dist < MIP_LEVEL4_START) mipFac =  8.;
-    else                              mipFac = 16.;
+    else                              mipFac =  4.;
     uv /= mipFac;
     #endif
 

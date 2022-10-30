@@ -243,7 +243,7 @@ export class Chunk {
             const vChunk = this.vChunks[i];
             debugAssert(vChunk !== undefined);
             if(vChunk === null || vChunk === undefined) continue;
-            vChunk.render(stuff, this.chunkPos[0] * 16, i * 16, this.chunkPos[0] * 16);
+            vChunk.render(stuff, this.chunkPos[0] * 16, i * 16, this.chunkPos[1] * 16);
         }
     }
 }
@@ -291,6 +291,7 @@ export class VChunk {
 
     setBlock(x: number, y: number, z: number, block: Block) {
         this.blockData[VChunk.blockIdx(x, y, z)] = block.valueOf();
+        this.meshDirty = true;
     }
 
     static newVChunk(): VChunk {
@@ -308,25 +309,6 @@ export class VChunk {
     rebuildMesh(stuff: MyStuff) {
         if(this.meshDirty) this.buildMesh(stuff);
     }
-
-    // private static readonly CUBE_VERTS: readonly (readonly [number, number, number])[] = [
-    //     [1, 1, 1],
-    //     [0, 1, 1],
-    //     [0, 0, 1],
-    //     [1, 0, 1],
-    //     [1, 0, 0],
-    //     [1, 1, 0],
-    //     [0, 1, 0],
-    //     [0, 0, 0],
-    // ] as const;
-    // private static readonly CUBE_INDICES: readonly number[] = [
-    //     0, 1, 2, 0, 2, 3, // front
-    //     0, 3, 4, 0, 4, 5, // right
-    //     0, 5, 6, 0, 6, 1, // up
-    //     1, 6, 7, 1, 7, 2, // left
-    //     7, 4, 3, 7, 3, 2, // down
-    //     4, 7, 6, 4, 6, 5, // back
-    // ] as const;
 
     private static readonly CUBE_FACE_OFFSETS: Record<CubeFace, readonly [number, number, number]> = {
         [CubeFace.FRONT]: [ 0,  0,  1],
@@ -416,9 +398,6 @@ export class VChunk {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.meshUVs);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshUVs), gl.STATIC_DRAW);
 
-        // this.meshVerts = new Float32Array(meshVerts);
-        // this.meshIndices = new Uint16Array(meshIndices);
-        // this.meshUVs = new Float32Array(meshUVs);
         this.meshDirty = false;
     }
     
@@ -446,13 +425,6 @@ export class VChunk {
     render(stuff: MyGlStuff, chunkX: number, chunkY: number, chunkZ: number): void {
         const { gl, programInfo: { vars: { uniformLocations: { u_BlockPos, u_FragColor }, attribLocations: { a_Position, a_UV } } } } = stuff;
         if(this.meshVerts !== null && this.meshIndices !== null && this.meshUVs !== null) {
-            // TODO is this how we should be doing it? or should we put the verts and indices into a
-            // gl buffer when we calculate them and then change which buffer ARRAY_BUFFER has? gotta
-            // read up on some more gl stuff or maybe ask in office hours
-            // gl.bufferData(gl.ARRAY_BUFFER, this.meshVerts, gl.STATIC_DRAW);
-            // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices, gl.STATIC_DRAW);
-
-            // assert(a_Position !== null);
             if(a_Position !== null) {
                 gl.bindBuffer(gl.ARRAY_BUFFER, this.meshVerts);
                 gl.enableVertexAttribArray(a_Position);
@@ -463,7 +435,6 @@ export class VChunk {
                 gl.enableVertexAttribArray(a_UV);
                 gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
             }
-            // if(a_UV !== null) gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices);
 
             // TODO probably rename BlockPos to something more general like Offset or whatever
@@ -475,7 +446,7 @@ export class VChunk {
 
             // render
             gl.drawElements(gl.TRIANGLES, this.numIndices, gl.UNSIGNED_SHORT, 0);
-            gl.drawElements(gl.LINES, this.numIndices, gl.UNSIGNED_SHORT, 0);
+            // gl.drawElements(gl.LINES, this.numIndices, gl.UNSIGNED_SHORT, 0);
         } else {
             warnRateLimited(`skipping render of vchunk ${chunkX},${chunkY},${chunkZ} as it has no mesh`);
         }

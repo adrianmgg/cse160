@@ -28,7 +28,7 @@ export type TextureAtlasInfo = {
 };
 
 /** debug switch, draw internal state of atlasing algorithm to atlas image */
-const drawFreeRects = true;
+const drawFreeRects = false;
 
 /** whether a and b overlap */
 function overlaps(a: DOMRectReadOnly, b: DOMRectReadOnly): boolean {
@@ -144,7 +144,7 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
     const atlasCtx = atlasCanvas.getContext('2d');
     assert(atlasCtx !== null);
 
-    atlasCtx.fillStyle = '#0F0';
+    atlasCtx.fillStyle = '#000';
     atlasCtx.fillRect(0, 0, atlasSize, atlasSize);
 
     // draw the textures

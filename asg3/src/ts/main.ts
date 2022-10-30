@@ -4,21 +4,6 @@ import { MCWorld } from './mc.js';
 import { atlasImages, loadImages, TextureAtlasInfo } from './texture.js';
 import { assert } from "./util.js";
 
-/*
-
-just gonna make drop some notes here -
-
-general overview of TODO stuff
-- texture loading
-- texture atlasing
-  - mip mapping atlases? might need to roll this myself since the standard mip mapping will probably
-    blur across the atlased textures, which we don't want
-- add uv to mesh, shader stuff
-- vchunks should generate meshes
-
-*/
-
-
 // making a type to hold all these so i can just pass them around instead of having global variables
 // for everything
 export type MyGlStuff = {
@@ -47,6 +32,10 @@ async function main() {
     // TODO temp debug thing
     // @ts-expect-error
     document.body.appendChild(atlas.image);
+    for(const [level, tex] of atlas.mipImages) {
+        // @ts-expect-error
+        document.body.appendChild(tex);
+    }
     // setupUI();
     const world = await setupWorld();
     const camera = new Camera();
@@ -93,10 +82,13 @@ function setupTextures(atlas: TextureAtlasInfo, { gl, programInfo: { vars: { uni
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas.image);
+    for(const [level, tex] of atlas.mipImages) {
+        gl.texImage2D(gl.TEXTURE_2D, level, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tex);
+    }
     // nearest neighbor for magnification
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    // nearest neighbor for minification (with NO mip maps, since we handle those ourselves)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    // nearest neighbor with mip maps for minification
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST);
     // clamp texture at edges
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);

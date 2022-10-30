@@ -25,10 +25,11 @@ export async function loadImages(names: string[]): Promise<(readonly [name: stri
 export type TextureAtlasInfo = {
     readonly image: TexImageSource;
     readonly texturePositions: Record<string, DOMRectReadOnly>;
+    readonly mipImages: (readonly [mipLevel: number, image: TexImageSource])[];
 };
 
 /** debug switch, draw internal state of atlasing algorithm to atlas image */
-const drawFreeRects = false;
+const drawFreeRects = true;
 
 /** whether a and b overlap */
 function overlaps(a: DOMRectReadOnly, b: DOMRectReadOnly): boolean {
@@ -62,8 +63,6 @@ export function atlasImages(images: AtlasBuilderInput, initialAtlasSize: number 
     return ret;
 }
 
-const ATLAS_PADDING = 1;
-
 function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtlasInfo | null {
     assert(isPow2(atlasSize), 'texture atlas dimension must be a power of 2');
     // setup initial free rectangles
@@ -71,9 +70,7 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
     // own rect stuff
     // const freeRects: DOMRectReadOnly[] = [];
     let freeRects: Set<DOMRectReadOnly> = new Set();
-    // excluding the 0,0 corner's quarter from the start so i can use that area for the mip map
-    freeRects.add(new DOMRectReadOnly(0, atlasSize / 2, atlasSize, atlasSize / 2));
-    freeRects.add(new DOMRectReadOnly(atlasSize / 2, 0, atlasSize / 2, atlasSize));
+    freeRects.add(new DOMRectReadOnly(0, 0, atlasSize, atlasSize));
 
     //
     let packedRects: [string, HTMLImageElement, DOMRectReadOnly][] = [];
@@ -82,7 +79,7 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
     // TODO cite ("a thousand ways wto pack the bin", Algorithm 3: The Maximal Rectangles algorithm.)
     for(const [name, img] of images) {
         // const imgRect = new DOMRectReadOnly(0, 0, img.width, img.height);
-        const imgRect = new DOMRectReadOnly(0, 0, img.width + ATLAS_PADDING * 2, img.height + ATLAS_PADDING * 2);
+        const imgRect = new DOMRectReadOnly(0, 0, img.width, img.height);
         // " Decide the free rectangle F_i to pack the rectangle R into
         const chosenFreeRect = setFind(freeRects,  r => fitsIn(imgRect, r));
         if(chosenFreeRect === undefined) return null;
@@ -144,26 +141,34 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
     const atlasCtx = atlasCanvas.getContext('2d');
     assert(atlasCtx !== null);
 
+    const mipCanvases: (readonly [number, HTMLCanvasElement, CanvasRenderingContext2D])[] = [];
+    for(let i = 1; i <= 2+4; i++) {
+        const mipScale = Math.pow(2, i);
+        const mipSize = atlasSize / mipScale;
+        assert(isPow2(mipSize));
+        const canvas = document.createElement('canvas');
+        canvas.width = mipSize;
+        canvas.height = mipSize;
+        const ctx = canvas.getContext('2d');
+        assert(ctx !== null);
+        mipCanvases.push([i, canvas, ctx] as const);
+    }
+
     atlasCtx.fillStyle = '#000';
     atlasCtx.fillRect(0, 0, atlasSize, atlasSize);
 
     // draw the textures
     for(const [name, tex, rect] of packedRects) {
-        const unpadded = new DOMRectReadOnly(rect.x + ATLAS_PADDING, rect.y + ATLAS_PADDING, rect.width - ATLAS_PADDING * 2, rect.height - ATLAS_PADDING * 2);
         // draw the full size
-        atlasCtx.drawImage(tex, unpadded.x - 1, unpadded.y - 1);
-        atlasCtx.drawImage(tex, unpadded.x + 1, unpadded.y - 1);
-        atlasCtx.drawImage(tex, unpadded.x + 1, unpadded.y + 1);
-        atlasCtx.drawImage(tex, unpadded.x - 1, unpadded.y + 1);
-        atlasCtx.drawImage(tex, unpadded.x + 1, unpadded.y    );
-        atlasCtx.drawImage(tex, unpadded.x - 1, unpadded.y    );
-        atlasCtx.drawImage(tex, unpadded.x    , unpadded.y + 1);
-        atlasCtx.drawImage(tex, unpadded.x    , unpadded.y - 1);
-        atlasCtx.drawImage(tex, unpadded.x, unpadded.y);
+        atlasCtx.drawImage(tex, rect.x, rect.y);
         // draw the mipmaps
         // TODO how will this handle non power-of-2 dimensioned textures? probably wrong so might need to require that
-        for(let s = 2; s <= tex.width && s <= tex.height; s *= 2) {
-            atlasCtx.drawImage(tex, rect.x / s, rect.y / s, rect.width / s, rect.height / s);
+        // for(let s = 2; s <= tex.width && s <= tex.height; s *= 2) {
+            // atlasCtx.drawImage(tex, rect.x / s, rect.y / s, rect.width / s, rect.height / s);
+        // }
+        for(const [mipLevel, _, mipCtx] of mipCanvases) {
+            const mipScale = Math.pow(2, mipLevel);
+            mipCtx.drawImage(tex, rect.x / mipScale, rect.y / mipScale, rect.width / mipScale, rect.height / mipScale);
         }
     }
 
@@ -187,8 +192,11 @@ function atlasImages_(images: AtlasBuilderInput, atlasSize: number): TextureAtla
 
     const texturePositions = Object.fromEntries(packedRects.map(([name, tex, r]) => [
         name,
-        new DOMRectReadOnly((r.x + ATLAS_PADDING) / atlasSize, (r.y + ATLAS_PADDING) / atlasSize, (r.width - ATLAS_PADDING * 2) / atlasSize, (r.height - ATLAS_PADDING * 2) / atlasSize)
+        new DOMRectReadOnly(r.x / atlasSize, r.y / atlasSize, r.width / atlasSize, r.height / atlasSize),
     ] as const));
 
-    return {image: atlasCanvas, texturePositions};
+    const mipImages = mipCanvases.map(([level, canvas, ctx]) => [level, canvas] as const);
+    console.log(mipImages);
+
+    return {image: atlasCanvas, texturePositions, mipImages};
 }

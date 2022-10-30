@@ -175,6 +175,7 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number): Textu
         canvas.height = mipSize;
         const ctx = canvas.getContext('2d');
         assert(ctx !== null);
+        // ctx.imageSmoothingEnabled = false;
         mipCanvases.push([mipLevel, canvas, ctx] as const);
     }
 
@@ -224,9 +225,7 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number): Textu
         }
     }
 
-
     const mipImages = mipCanvases.map(([level, canvas]) => [level, canvas] as const);
-    console.log(mipImages);
 
     return {texturePositions, textures: mipImages};
 }

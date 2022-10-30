@@ -24,8 +24,9 @@ async function main() {
     const imagesPromise = loadImages(['bedrock', 'cobblestone', 'dirt', 'grass_top', 'grass_side', 'stone']);
     // const imagesPromise = loadImages([]);
     const gl = initWebGL();
+    const glExtensions = setupGLExtensions(gl);
     setupWebGL(gl);
-    const programInfo = await setupShaders(gl);
+    const programInfo = await setupShaders(gl, glExtensions);
     const glStuff: MyGlStuff = {gl, programInfo};
     const atlas = atlasImages(await imagesPromise, 64);
     setupTextures(atlas, glStuff);
@@ -62,6 +63,8 @@ function initWebGL(): WebGLRenderingContext {
 function setupWebGL(gl: WebGLRenderingContext) {
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
+    // gl.enable(gl.BLEND);
+    // gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 }
 
 type MyProgramInfo = {
@@ -69,8 +72,30 @@ type MyProgramInfo = {
     vars: ProgramVarLocations<['a_Position', 'a_UV'], ['u_FragColor', 'u_CameraMat', 'u_BlockPos', 'u_TextureAtlas', 'u_CameraPos']>;
 };
 
-async function setupShaders(gl: WebGLRenderingContext): Promise<MyProgramInfo> {
-    const program = await loadProgramFromFiles(gl, 'shaders/vertex.vert', 'shaders/fragment.frag');
+function setupGLExtensions(gl: WebGLRenderingContext): Set<string> {
+    const supportedExtensions = gl.getSupportedExtensions() ?? [];
+    const usedExtensions = new Set<string>();
+    for(const desiredExtension of [
+        // list extensions here
+    ]) {
+        if(supportedExtensions.includes(desiredExtension)) {
+            usedExtensions.add(desiredExtension);
+        }
+    }
+    for(const ext of usedExtensions) {
+        gl.getExtension(ext);
+    }
+    return usedExtensions;
+}
+
+async function setupShaders(gl: WebGLRenderingContext, extensions: Set<string>): Promise<MyProgramInfo> {
+    const hasExtensionDefines = [];
+    for(const extension of extensions) {
+        hasExtensionDefines.push(`HAS_EXT__${extension}`);
+    }
+    const program = await loadProgramFromFiles(gl, 'shaders/vertex.vert', 'shaders/fragment.frag', [
+        ...hasExtensionDefines,
+    ]);
     // TODO not the right place for this todo but whatever - should i be `deleteShader`ing after i'm
     // done making the program?
     gl.useProgram(program);
@@ -91,7 +116,12 @@ function setupTextures(atlas: TextureAtlasInfo, { gl, programInfo: { vars: { uni
     // nearest neighbor for magnification
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     // nearest neighbor with mip maps for minification
+    // TODO add an option to toggle this between NEAREST_MIPMAP_NEAREST and NEAREST_MIPMAP_LINEAR
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     // clamp texture at edges
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -116,6 +146,10 @@ function tick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     stuff.camera.gazeTowards(Vec.of(8, 0, 8));
     // stuff.camera.gaze = stuff.camera.gaze.div(stuff.camera.gaze.magnitude());
     stuff.camera.pos.y += 20;
+
+    // stuff.camera.pos = Vec.fromCylindrical(20, Math.PI * (1/4+1/16), 20).add(Vec.of(8, 0, 8));
+    // stuff.camera.gazeTowards(Vec.of(8, 0, 8));
+    // stuff.camera.pos.y += 20;
 
     // stuff.camera.pos = Vec.of(8, 51, 8);
     // stuff.camera.gaze = Vec.DOWN;
@@ -145,6 +179,7 @@ window.addEventListener('DOMContentLoaded', main);
 
 function clearCanvas({ gl }: MyGlStuff) {
     gl.clearColor(.8, .8, .8, 1.0);
+    // gl.clearColor(1., 0., 1., 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 }
 

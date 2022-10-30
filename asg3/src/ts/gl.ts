@@ -1,9 +1,17 @@
 import { assert } from './util.js';
 
-export async function loadProgramFromFiles(gl: WebGLRenderingContext, vetexShaderPath: string, fragmentShaderPath: string): Promise<WebGLProgram> {
+function buildPreprocessorDefineSegment(defines: (string | readonly [string, string])[]): string {
+    return defines.map(define => {
+        if(typeof define === 'string') return `#define ${define}`;
+        else return `#define ${define[0]} ${define[1]}`;
+    }).join('\n');
+}
+
+export async function loadProgramFromFiles(gl: WebGLRenderingContext, vertexShaderPath: string, fragmentShaderPath: string, preprocessorDefines: (string | readonly [string, string])[]): Promise<WebGLProgram> {
+    const definesSegment = buildPreprocessorDefineSegment(preprocessorDefines);
     // start the fetch as early as we can, but delay actually awaiting them until right before we need them
-    const vertPromise = loadShaderFromFile(gl, gl.VERTEX_SHADER, vetexShaderPath);
-    const fragPromise = loadShaderFromFile(gl, gl.FRAGMENT_SHADER, fragmentShaderPath);
+    const vertPromise = loadShaderFromFile(gl, gl.VERTEX_SHADER, vertexShaderPath, definesSegment);
+    const fragPromise = loadShaderFromFile(gl, gl.FRAGMENT_SHADER, fragmentShaderPath, definesSegment);
     const program = gl.createProgram();
     assert(program !== null);
     gl.attachShader(program, await vertPromise);
@@ -23,8 +31,11 @@ export async function loadProgramFromFiles(gl: WebGLRenderingContext, vetexShade
     return program;
 }
 
-export async function loadShaderFromFile(gl: WebGLRenderingContext, type: GLenum, sourcePath: string): Promise<WebGLShader> {
-    const source = await fetch(sourcePath).then(r => r.text());
+export async function loadShaderFromFile(gl: WebGLRenderingContext, type: GLenum, sourcePath: string, prependWith?: string): Promise<WebGLShader> {
+    let source = await fetch(sourcePath).then(r => r.text());
+    if(prependWith !== undefined) {
+        source = `${prependWith}\n${source}`;
+    }
     const shader = gl.createShader(type);
     assert(shader !== null);
     gl.shaderSource(shader, source);

@@ -29,12 +29,15 @@ async function main() {
     const glStuff: MyGlStuff = {gl, programInfo};
     const atlas = atlasImages(await imagesPromise, 64);
     setupTextures(atlas, glStuff);
-    // TODO temp debug thing
-    // @ts-expect-error
-    document.body.appendChild(atlas.image);
-    for(const [level, tex] of atlas.mipImages) {
+    // TODO temp debug thing, move this somewhere else
+    for(const [level, tex] of atlas.textures) {
         // @ts-expect-error
         document.body.appendChild(tex);
+        Object.assign((tex as HTMLCanvasElement).style, {
+            width: '128px',
+            height: '128px',
+            imageRendering: 'pixelated',
+        });
     }
     // setupUI();
     const world = await setupWorld();
@@ -81,8 +84,8 @@ function setupTextures(atlas: TextureAtlasInfo, { gl, programInfo: { vars: { uni
     const texture = gl.createTexture();
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas.image);
-    for(const [level, tex] of atlas.mipImages) {
+    // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas.image);
+    for(const [level, tex] of atlas.textures) {
         gl.texImage2D(gl.TEXTURE_2D, level, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tex);
     }
     // nearest neighbor for magnification

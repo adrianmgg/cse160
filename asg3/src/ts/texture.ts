@@ -23,9 +23,8 @@ export async function loadImages(names: string[]): Promise<(readonly [name: stri
 }
 
 export type TextureAtlasInfo = {
-    readonly image: TexImageSource;
     readonly texturePositions: Record<string, DOMRectReadOnly>;
-    readonly mipImages: (readonly [mipLevel: number, image: TexImageSource])[];
+    readonly textures: (readonly [mipLevel: number, image: TexImageSource])[];
 };
 
 // TODO factor these out to some settings thing, preferably one that can be changed at runtime
@@ -166,15 +165,8 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number): Textu
 
     const texturePositions: Record<string, DOMRectReadOnly> = {};
 
-    // set up the canvas we'll be drawing the atlas to
-    const atlasCanvas = document.createElement('canvas');
-    atlasCanvas.width = atlasSize;
-    atlasCanvas.height = atlasSize;
-    const atlasCtx = atlasCanvas.getContext('2d');
-    assert(atlasCtx !== null);
-
     const mipCanvases: (readonly [number, HTMLCanvasElement, CanvasRenderingContext2D])[] = [];
-    for(let mipLevel = 1; atlasSize / Math.pow(2, mipLevel) >= 1; mipLevel++) {
+    for(let mipLevel = 0; atlasSize / Math.pow(2, mipLevel) >= 1; mipLevel++) {
         const mipScale = Math.pow(2, mipLevel);
         const mipSize = atlasSize / mipScale;
         assert(isPow2(mipSize));
@@ -186,10 +178,9 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number): Textu
         mipCanvases.push([mipLevel, canvas, ctx] as const);
     }
 
-    atlasCtx.fillStyle = '#000';
-    atlasCtx.fillRect(0, 0, atlasSize, atlasSize);
+    // atlasCtx.fillStyle = '#000';
+    // atlasCtx.fillRect(0, 0, atlasSize, atlasSize);
 
-    // draw the textures
     for(const [rect, [name, tex]] of atlasPack.packedRects) {
         // store the rect (transformed to [0, 1] uv space) to be returned
         if(name in texturePositions) {
@@ -197,46 +188,45 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number): Textu
         } else {
             texturePositions[name] = new DOMRectReadOnly(rect.x / atlasSize, rect.y / atlasSize, rect.width / atlasSize, rect.height / atlasSize);
         }
-        // draw the full size
-        atlasCtx.drawImage(tex, rect.x, rect.y, rect.width, rect.height);
-        // draw the mipmaps
-        // TODO how will this handle non power-of-2 dimensioned textures? probably wrong so might need to require that
-        // for(let s = 2; s <= tex.width && s <= tex.height; s *= 2) {
-            // atlasCtx.drawImage(tex, rect.x / s, rect.y / s, rect.width / s, rect.height / s);
-        // }
         for(const [mipLevel, _, mipCtx] of mipCanvases) {
             const mipScale = Math.pow(2, mipLevel);
             mipCtx.drawImage(tex, rect.x / mipScale, rect.y / mipScale, rect.width / mipScale, rect.height / mipScale);
         }
     }
 
+    // draw the textures
+    {
+        const fullSizeAtlasCtx = mipCanvases.find(([level]) => level === 0)?.[2];
+        assert(fullSizeAtlasCtx !== undefined);
+            // debug - draw the remaining free rects
+            if(drawFreeRects) {
+                const abc: [DOMRectReadOnly, string][] = [];
+                for(const r of atlasPack.freeRects) {
+                    const rgb = `${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255}`;
+                    abc.push([r, rgb]);
+                }
+                for(const [r, rgb] of abc){
+                    fullSizeAtlasCtx.fillStyle = `rgba(${rgb}, .2)`;
+                    fullSizeAtlasCtx.fillRect(r.x, r.y, r.width, r.height);
+                }
+                for(const [r, rgb] of abc){
+                    fullSizeAtlasCtx.strokeStyle = `rgba(${rgb}, .5)`;
+                    fullSizeAtlasCtx.lineWidth = 1;
+                    fullSizeAtlasCtx.strokeRect(r.x + .5, r.y + .5, r.width - 1, r.height - 1);
+                }
+            }
+    }
+
     if(colorizeMipLevels) {
         for(const [level, canvas, ctx] of mipCanvases) {
-            ctx.fillStyle = `hsla(${level / mipCanvases.length * 100 * 300}, 100%, 50%, 0.5)`;
+            ctx.fillStyle = `hsla(${level / (mipCanvases.length - 1) * 300}, 100%, 50%, 0.5)`;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
     }
 
-    // debug - draw the remaining free rects
-    if(drawFreeRects) {
-        const abc: [DOMRectReadOnly, string][] = [];
-        for(const r of atlasPack.freeRects) {
-            const rgb = `${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255}`;
-            abc.push([r, rgb]);
-        }
-        for(const [r, rgb] of abc){
-            atlasCtx.fillStyle = `rgba(${rgb}, .2)`;
-            atlasCtx.fillRect(r.x, r.y, r.width, r.height);
-        }
-        for(const [r, rgb] of abc){
-            atlasCtx.strokeStyle = `rgba(${rgb}, .5)`;
-            atlasCtx.lineWidth = 1;
-            atlasCtx.strokeRect(r.x + .5, r.y + .5, r.width - 1, r.height - 1);
-        }
-    }
 
     const mipImages = mipCanvases.map(([level, canvas]) => [level, canvas] as const);
     console.log(mipImages);
 
-    return {image: atlasCanvas, texturePositions, mipImages};
+    return {texturePositions, textures: mipImages};
 }

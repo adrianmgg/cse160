@@ -120,7 +120,7 @@ async function setupShaders({gl}: WebGL1Or2, extensions: Set<string>): Promise<M
     };
 }
 
-function setupTextures(atlas: TextureAtlasInfo, { gl, programInfo: { vars: { uniformLocations: { u_TextureAtlas } } } }: MyGlStuff) {
+function setupTextures(atlas: TextureAtlasInfo, { gl, hasWebgl2, programInfo: { vars: { uniformLocations: { u_TextureAtlas } } } }: MyGlStuff) {
     const texture = gl.createTexture();
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -140,6 +140,11 @@ function setupTextures(atlas: TextureAtlasInfo, { gl, programInfo: { vars: { uni
     // clamp texture at edges
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // set max LOD level for the texture (webgl 2 only)
+    if(hasWebgl2) {
+        console.log(atlas.maxMipLevel);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LOD, atlas.maxMipLevel);
+    }
     //
     gl.uniform1i(u_TextureAtlas, 0);
 }

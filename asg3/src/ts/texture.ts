@@ -25,6 +25,8 @@ export async function loadImages(names: string[]): Promise<(readonly [name: stri
 export type TextureAtlasInfo = {
     readonly texturePositions: Record<string, DOMRectReadOnly>;
     readonly textures: (readonly [mipLevel: number, image: TexImageSource])[];
+    /** highest mipmap level where no atlased textures overlap */
+    readonly maxMipLevel: number;
 };
 
 // TODO factor these out to some settings thing, preferably one that can be changed at runtime
@@ -163,8 +165,7 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number): Textu
         }
     }
 
-    const texturePositions: Record<string, DOMRectReadOnly> = {};
-
+    
     const mipCanvases: (readonly [number, HTMLCanvasElement, CanvasRenderingContext2D])[] = [];
     for(let mipLevel = 0; atlasSize / Math.pow(2, mipLevel) >= 1; mipLevel++) {
         const mipScale = Math.pow(2, mipLevel);
@@ -177,11 +178,16 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number): Textu
         assert(ctx !== null);
         // ctx.imageSmoothingEnabled = false;
         mipCanvases.push([mipLevel, canvas, ctx] as const);
+        // debug - fill with magenta
+        ctx.fillStyle = '#00F';
+        ctx.fillRect(0, 0, mipSize, mipSize);
     }
-
+    
     // atlasCtx.fillStyle = '#000';
     // atlasCtx.fillRect(0, 0, atlasSize, atlasSize);
-
+    
+    // store uv coordinates of each packed texture
+    const texturePositions: Record<string, DOMRectReadOnly> = {};
     for(const [rect, [name, tex]] of atlasPack.packedRects) {
         // store the rect (transformed to [0, 1] uv space) to be returned
         if(name in texturePositions) {
@@ -189,13 +195,26 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number): Textu
         } else {
             texturePositions[name] = new DOMRectReadOnly(rect.x / atlasSize, rect.y / atlasSize, rect.width / atlasSize, rect.height / atlasSize);
         }
-        for(const [mipLevel, _, mipCtx] of mipCanvases) {
+    }
+
+    // render each mipmap level, also keep track of what the highest ok mipmap level is
+    let maxMipLevel = 0;
+    let passedMaxMipLevel = false;
+    for(const [mipLevel, _, mipCtx] of mipCanvases) {
+        let allWholeNumberSizes = true;
+        for(const [rect, [name, tex]] of atlasPack.packedRects) {
             const mipScale = Math.pow(2, mipLevel);
-            mipCtx.drawImage(tex, rect.x / mipScale, rect.y / mipScale, rect.width / mipScale, rect.height / mipScale);
+            let drawX = rect.x / mipScale, drawY = rect.y / mipScale, drawWidth = rect.width / mipScale, drawHeight = rect.height / mipScale;
+            allWholeNumberSizes &&= Number.isInteger(drawX) && Number.isInteger(drawY) && Number.isInteger(drawWidth) && Number.isInteger(drawHeight);
+            mipCtx.drawImage(tex, drawX, drawY, drawWidth, drawHeight);
+        }
+        if(!passedMaxMipLevel) {
+            if(allWholeNumberSizes) maxMipLevel = mipLevel;
+            else passedMaxMipLevel = true;
         }
     }
 
-    // draw the textures
+    // optionally draw some debug info about the atlasing process to the free space in the texture
     {
         const fullSizeAtlasCtx = mipCanvases.find(([level]) => level === 0)?.[2];
         assert(fullSizeAtlasCtx !== undefined);
@@ -227,5 +246,5 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number): Textu
 
     const mipImages = mipCanvases.map(([level, canvas]) => [level, canvas] as const);
 
-    return {texturePositions, textures: mipImages};
+    return {texturePositions, textures: mipImages, maxMipLevel};
 }

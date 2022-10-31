@@ -4,12 +4,21 @@ import { MCWorld } from './mc.js';
 import { atlasImages, loadImages, TextureAtlasInfo } from './texture.js';
 import { assert } from "./util.js";
 
+// TODO factor this into some debug settings thing eventually probably
+/** debug option, disable use of webgl 2 */
+const forceWebgl1 = false;
+
 // making a type to hold all these so i can just pass them around instead of having global variables
 // for everything
 export type MyGlStuff = {
-    gl: WebGLRenderingContext;
+    // gl: WebGLRenderingContext;
     programInfo: MyProgramInfo;
-};
+} & WebGL1Or2;
+
+export type WebGL1Or2 = (
+    | { gl: WebGLRenderingContext,  hasWebgl2: false }
+    | { gl: WebGL2RenderingContext, hasWebgl2: true  }
+);
 
 // TODO give this a better name
 export type MyStuff = {
@@ -23,11 +32,11 @@ async function main() {
     // start the images loading as early as possible, we'll await this later once we need them
     const imagesPromise = loadImages(['bedrock', 'cobblestone', 'dirt', 'grass_top', 'grass_side', 'stone']);
     // const imagesPromise = loadImages([]);
-    const gl = initWebGL();
-    const glExtensions = setupGLExtensions(gl);
-    setupWebGL(gl);
-    const programInfo = await setupShaders(gl, glExtensions);
-    const glStuff: MyGlStuff = {gl, programInfo};
+    const gl1or2 = initWebGL();
+    const glExtensions = setupGLExtensions(gl1or2);
+    setupWebGL(gl1or2);
+    const programInfo = await setupShaders(gl1or2, glExtensions);
+    const glStuff: MyGlStuff = {...gl1or2, programInfo};
     const atlas = atlasImages(await imagesPromise, 64);
     setupTextures(atlas, glStuff);
     // TODO temp debug thing, move this somewhere else
@@ -51,16 +60,22 @@ async function main() {
     requestAnimationFrame(tick.bind(null, stuff));
 }
 
-function initWebGL(): WebGLRenderingContext {
+function initWebGL(): WebGL1Or2 {
     const canvas = document.getElementById('canvas');
     assert(canvas !== null);
     assert(canvas instanceof HTMLCanvasElement);
+    if(!forceWebgl1) {
+        const gl2 = canvas.getContext('webgl2', {antialias: false});
+        if(gl2 !== null) {
+            return {gl: gl2, hasWebgl2: true};
+        }
+    }
     const gl = canvas.getContext('webgl', {antialias: false});
     assert(gl !== null);
-    return gl;
+    return {gl, hasWebgl2: false};
 }
 
-function setupWebGL(gl: WebGLRenderingContext) {
+function setupWebGL({gl}: WebGL1Or2) {
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
     // gl.enable(gl.BLEND);
@@ -72,7 +87,7 @@ type MyProgramInfo = {
     vars: ProgramVarLocations<['a_Position', 'a_UV'], ['u_FragColor', 'u_CameraMat', 'u_BlockPos', 'u_TextureAtlas', 'u_CameraPos']>;
 };
 
-function setupGLExtensions(gl: WebGLRenderingContext): Set<string> {
+function setupGLExtensions({gl}: WebGL1Or2): Set<string> {
     const supportedExtensions = gl.getSupportedExtensions() ?? [];
     const usedExtensions = new Set<string>();
     for(const desiredExtension of [
@@ -88,7 +103,7 @@ function setupGLExtensions(gl: WebGLRenderingContext): Set<string> {
     return usedExtensions;
 }
 
-async function setupShaders(gl: WebGLRenderingContext, extensions: Set<string>): Promise<MyProgramInfo> {
+async function setupShaders({gl}: WebGL1Or2, extensions: Set<string>): Promise<MyProgramInfo> {
     const hasExtensionDefines = [];
     for(const extension of extensions) {
         hasExtensionDefines.push(`HAS_EXT__${extension}`);

@@ -282,33 +282,83 @@ export class Vec {
         return Math.sqrt(this.x*this.x + this.y*this.y + this.z*this.z);
     }
 
-    add(n: number): Vec;
-    add(v: Vec): Vec;
+    addInPlace(a: Vec | number): Vec {
+        if(typeof a === 'number') {
+            this.x += a;
+            this.y += a;
+            this.z += a;
+        } else {
+            this.x += a.x;
+            this.y += a.y;
+            this.z += a.z;
+        }
+        return this;
+    }
     add(a: Vec | number): Vec {
-        if(typeof a === 'number') return Vec.of(this.x + a, this.y + a, this.z + a);
-        else return Vec.of(this.x + a.x, this.y + a.y, this.z + a.z);
+        return this.clone().addInPlace(a);
     }
-    sub(n: number): Vec;
-    sub(v: Vec): Vec;
+    subInPlace(a: Vec | number): Vec {
+        if(typeof a === 'number') {
+            this.x -= a;
+            this.y -= a;
+            this.z -= a;
+        }
+        else {
+            this.x -= a.x;
+            this.y -= a.y;
+            this.z -= a.z;
+        }
+        return this;
+    }
     sub(a: Vec | number): Vec {
-        if(typeof a === 'number') return Vec.of(this.x - a, this.y - a, this.z - a);
-        else return Vec.of(this.x - a.x, this.y - a.y, this.z - a.z);
+        return this.clone().subInPlace(a);
     }
-    mul(n: number): Vec;
-    mul(v: Vec): Vec;
+    mulInPlace(a: Vec | number): Vec {
+        if(typeof a === 'number') {
+            this.x *= a;
+            this.y *= a;
+            this.z *= a;
+        } else {
+            this.x *= a.x;
+            this.y *= a.y;
+            this.z *= a.z;
+        }
+        return this;
+    }
     mul(a: Vec | number): Vec {
-        if(typeof a === 'number') return Vec.of(this.x * a, this.y * a, this.z * a);
-        else return Vec.of(this.x * a.x, this.y * a.y, this.z * a.z);
+        return this.clone().mulInPlace(a);
     }
-    div(n: number): Vec;
-    div(v: Vec): Vec;
+    divInPlace(a: Vec | number): Vec {
+        if(typeof a === 'number') {
+            this.x /= a;
+            this.y /= a;
+            this.z /= a;
+        } else {
+            this.x /= a.x;
+            this.y /= a.y;
+            this.z /= a.z;
+        }
+        return this;
+    }
     div(a: Vec | number): Vec {
-        if(typeof a === 'number') return Vec.of(this.x / a, this.y / a, this.z / a);
-        else return Vec.of(this.x / a.x, this.y / a.y, this.z / a.z);
+        return this.clone().divInPlace(a);
     }
 
-    cross(b: Vec): Vec {
-        return Vec.of(-this.z*b.y + this.y*b.z, this.z*b.x - this.x*b.z, -this.y*b.x + this.x*b.y);
+    crossInPlace(v: Vec): Vec {
+        const x = -this.z*v.y + this.y*v.z;
+        const y = this.z*v.x - this.x*v.z;
+        const z = -this.y*v.x + this.x*v.y
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        return this;
+    }
+    cross(v: Vec): Vec {
+        return this.clone().cross(v);
+    }
+
+    dot(v: Vec): number {
+        return this.x * v.x + this.y * v.y + this.z * v.z;
     }
 
     xyz(): NTupleOf<number, 3> {
@@ -325,23 +375,25 @@ export class Vec {
     }
     transform(mat: Mat4x4): Vec { return this.clone().transformInPlace(mat); }
 
-    static ZERO = Vec.of(0, 0, 0);
-    static ONE = Vec.of(1, 1, 1);
-    static UP = Vec.of(0, 1, 0);
-    static DOWN = Vec.of(0, -1, 0);
-    static RIGHT = Vec.of(1, 0, 0);
-    static LEFT = Vec.of(-1, 0, 0);
-    static BACKWARDS = Vec.of(0, 0, 1);
-    static FORWARDS = Vec.of(0, 0, -1);
+    static zero()       { return Vec.of( 0,  0,  0); }
+    static one()        { return Vec.of( 1,  1,  1); }
+    static up()         { return Vec.of( 0,  1,  0); }
+    static down()       { return Vec.of( 0, -1,  0); }
+    static right()      { return Vec.of( 1,  0,  0); }
+    static left()       { return Vec.of(-1,  0,  0); }
+    static backwards()  { return Vec.of( 0,  0,  1); }
+    static forwards()   { return Vec.of( 0,  0, -1); }
 }
 
 export class Camera {
-    pos: Vec = Vec.ZERO;
-    gaze: Vec = Vec.FORWARDS;
-    up: Vec = Vec.UP;
+    pos: Vec = Vec.zero();
+    gaze: Vec = Vec.forwards();
+    up: Vec = Vec.up();
     nearPlane: number = 1e-2;
     farPlane: number = 1e4;
     fov: number = Math.PI / 2;
+    rotX: number = 0;
+    rotY: number = 0;
 
     /** point {@link Camera.gaze} towards the specified point */
     gazeTowards(v: Vec) {
@@ -359,6 +411,9 @@ export class Camera {
             w.x, w.y, w.z, 0,
             0, 0, 0, 1
         ).translate(-this.pos.x, -this.pos.y, -this.pos.z);
+        // ).matmul(Mat4x4.locRotScale(this.pos.x, this.pos.y, this.pos.z, this.rotX, this.rotY, 0, 1, 1, 1).inverse())
+        // ).rotateY(-this.rotY).rotateX(-this.rotX).translate(-this.pos.x, -this.pos.y, -this.pos.z);
+        // ).matmul(Mat4x4.translate(this.pos.x, this.pos.y, this.pos.z).rotateY(this.rotY).rotateX(this.rotX).inverse());
     }
 
     private perspectiveMat(): Mat4x4 {
@@ -622,6 +677,70 @@ export class Color {
 //         // }
 //     }
 // }
+
+export class Quaternion {
+    private v: Vec;
+    private w: number;
+
+    constructor();
+    constructor(v: Vec, s: number);
+    constructor(v?: Vec, s?: number) {
+        this.v = v ?? Vec.of(0, 0, 0);
+        this.w = s ?? 0.0;
+    }
+
+    clone(): Quaternion {
+        return new Quaternion(this.v.clone(), this.w);
+    }
+
+    addInPlace(q: Quaternion): Quaternion {
+        this.v.add
+        this.w += q.w;
+        return this;
+    }
+    add(q: Quaternion) {
+        return this.clone().addInPlace(q);
+    }
+
+    mulInPlace(a: Quaternion | number): Quaternion {
+        if(typeof a === 'number') {
+            // scalar mul
+            this.v.mulInPlace(a);
+            this.w *= a;
+        } else {
+            // quaternion mul
+            const w = this.w * a.w - this.v.dot(a.v);
+            const v = a.v.clone().mulInPlace(this.w).addInPlace(this.v.mul(a.w)).addInPlace(this.v.cross(a.v));
+            this.w = w;
+            this.v = v;
+        }
+        return this;
+    }
+    mul(a: Quaternion | number): Quaternion {
+        return this.clone().mulInPlace(a);
+    }
+
+    norm(): number {
+        return Math.sqrt(this.v.x * this.v.x + this.v.y * this.v.y + this.v.z * this.v.z + this.w * this.w);
+    }
+
+    normalizeInPlace(): Quaternion {
+        return this.mulInPlace(1 / this.norm());
+    }
+    normalized(): Quaternion {
+        return this.clone().normalizeInPlace();
+    }
+
+    inverseInPlace(): Quaternion {
+        const n = this.norm();
+        this.v.mulInPlace(-1).divInPlace(n);
+        this.w /= n;
+        return this;
+    }
+    inverse(): Quaternion {
+        return this.clone().inverseInPlace();
+    }
+}
 
 
 

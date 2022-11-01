@@ -27,6 +27,8 @@ export type TextureAtlasInfo = {
     readonly textures: (readonly [mipLevel: number, image: TexImageSource])[];
     /** highest mipmap level where no atlased textures overlap */
     readonly maxMipLevel: number;
+    readonly width: number;
+    readonly height: number;
 };
 
 // TODO factor these out to some settings thing, preferably one that can be changed at runtime
@@ -246,5 +248,5 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number): Textu
 
     const mipImages = mipCanvases.map(([level, canvas]) => [level, canvas] as const);
 
-    return {texturePositions, textures: mipImages, maxMipLevel};
+    return {texturePositions, textures: mipImages, maxMipLevel, width: atlasSize, height: atlasSize};
 }

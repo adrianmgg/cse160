@@ -82,16 +82,22 @@ function setupWebGL({gl}: WebGL1Or2) {
     // gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 }
 
+const SHADER_ATTRIBUTE_NAMES = ['a_Position', 'a_UV'] as const;
+const SHADER_UNIFORM_NAMES = ['u_CameraMat', 'u_BlockPos', 'u_TextureAtlas', 'u_MaxTextureAtlasLOD', 'u_TextureAtlasDimensions'] as const;
+
 type MyProgramInfo = {
     program: WebGLProgram;
-    vars: ProgramVarLocations<['a_Position', 'a_UV'], ['u_FragColor', 'u_CameraMat', 'u_BlockPos', 'u_TextureAtlas', 'u_CameraPos']>;
+    vars: ProgramVarLocations<typeof SHADER_ATTRIBUTE_NAMES, typeof SHADER_UNIFORM_NAMES>;
 };
 
 function setupGLExtensions({gl}: WebGL1Or2): Set<string> {
     const supportedExtensions = gl.getSupportedExtensions() ?? [];
     const usedExtensions = new Set<string>();
+    // console.log(supportedExtensions);
     for(const desiredExtension of [
         // list extensions here
+        // TODO OES_standard_derivatives & EXT_shader_texture_lod are conditional on lack of webgl2 (not required even in that case tho)
+        'OES_standard_derivatives', 'EXT_shader_texture_lod',
     ]) {
         if(supportedExtensions.includes(desiredExtension)) {
             usedExtensions.add(desiredExtension);
@@ -103,12 +109,14 @@ function setupGLExtensions({gl}: WebGL1Or2): Set<string> {
     return usedExtensions;
 }
 
-async function setupShaders({gl}: WebGL1Or2, extensions: Set<string>): Promise<MyProgramInfo> {
+async function setupShaders({gl, hasWebgl2}: WebGL1Or2, extensions: Set<string>): Promise<MyProgramInfo> {
     const hasExtensionDefines = [];
+    if(hasWebgl2) hasExtensionDefines.push('HAS_WEBGL2');
     for(const extension of extensions) {
-        hasExtensionDefines.push(`HAS_EXT__${extension}`);
+        hasExtensionDefines.push(`HAS_EXT_${extension}`);
     }
-    const program = await loadProgramFromFiles(gl, 'shaders/vertex.vert', 'shaders/fragment.frag', [
+    const glslVersion = (hasWebgl2) ? '300 es' : '100';
+    const program = await loadProgramFromFiles(gl, 'shaders/vertex.vert', 'shaders/fragment.frag', glslVersion, [
         ...hasExtensionDefines,
     ]);
     // TODO not the right place for this todo but whatever - should i be `deleteShader`ing after i'm
@@ -116,11 +124,11 @@ async function setupShaders({gl}: WebGL1Or2, extensions: Set<string>): Promise<M
     gl.useProgram(program);
     return {
         program: program,
-        vars: getProgramVarLocations(gl, program, ['a_Position', 'a_UV'] as const, ['u_FragColor', 'u_CameraMat', 'u_BlockPos', 'u_TextureAtlas', 'u_CameraPos'] as const),
+        vars: getProgramVarLocations(gl, program, SHADER_ATTRIBUTE_NAMES, SHADER_UNIFORM_NAMES),
     };
 }
 
-function setupTextures(atlas: TextureAtlasInfo, { gl, hasWebgl2, programInfo: { vars: { uniformLocations: { u_TextureAtlas } } } }: MyGlStuff) {
+function setupTextures(atlas: TextureAtlasInfo, { gl, hasWebgl2, programInfo: { vars: { uniformLocations: { u_TextureAtlas, u_MaxTextureAtlasLOD, u_TextureAtlasDimensions } } } }: MyGlStuff) {
     const texture = gl.createTexture();
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -142,9 +150,10 @@ function setupTextures(atlas: TextureAtlasInfo, { gl, hasWebgl2, programInfo: { 
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     // set max LOD level for the texture (webgl 2 only)
     if(hasWebgl2) {
-        console.log(atlas.maxMipLevel);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LOD, atlas.maxMipLevel);
     }
+    if(u_MaxTextureAtlasLOD !== null) gl.uniform1f(u_MaxTextureAtlasLOD, atlas.maxMipLevel);
+    if(u_TextureAtlasDimensions !== null) gl.uniform2f(u_TextureAtlasDimensions, atlas.width, atlas.height);
     //
     gl.uniform1i(u_TextureAtlas, 0);
 }
@@ -183,11 +192,10 @@ function tick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     stuff.world.rebuildMeshes(stuff);
 
     // TODO buffer stuff here for now, should move
-    const { glStuff: { gl, programInfo: { vars: { uniformLocations: { u_CameraMat, u_CameraPos } } } } } = stuff;
+    const { glStuff: { gl, programInfo: { vars: { uniformLocations: { u_CameraMat } } } } } = stuff;
     // gl.bufferData(gl.ARRAY_BUFFER, Mesh.UNIT_CUBE.verts, gl.STATIC_DRAW);
     // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Mesh.UNIT_CUBE.indices, gl.STATIC_DRAW);
 
-    gl.uniform3f(u_CameraPos, ...stuff.camera.pos.xyz());
     gl.uniformMatrix4fv(u_CameraMat, false, stuff.camera.world2viewMat().data);
 
     stuff.world.render(stuff.glStuff);

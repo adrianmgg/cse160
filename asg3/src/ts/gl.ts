@@ -1,17 +1,20 @@
 import { assert } from './util.js';
 
-function buildPreprocessorDefineSegment(defines: (string | readonly [string, string])[]): string {
+function buildPreprocessorDefineSegment(defines: (string | readonly [string, string])[]): string[] {
     return defines.map(define => {
         if(typeof define === 'string') return `#define ${define}`;
         else return `#define ${define[0]} ${define[1]}`;
-    }).join('\n');
+    });
 }
 
-export async function loadProgramFromFiles(gl: WebGLRenderingContext, vertexShaderPath: string, fragmentShaderPath: string, preprocessorDefines: (string | readonly [string, string])[]): Promise<WebGLProgram> {
-    const definesSegment = buildPreprocessorDefineSegment(preprocessorDefines);
+export async function loadProgramFromFiles(gl: WebGLRenderingContext, vertexShaderPath: string, fragmentShaderPath: string, glslVersion: string, preprocessorDefines: (string | readonly [string, string])[]): Promise<WebGLProgram> {
+    const prependPart = [
+        `#version ${glslVersion}`,
+        ...buildPreprocessorDefineSegment(preprocessorDefines),
+    ].join('\n');
     // start the fetch as early as we can, but delay actually awaiting them until right before we need them
-    const vertPromise = loadShaderFromFile(gl, gl.VERTEX_SHADER, vertexShaderPath, definesSegment);
-    const fragPromise = loadShaderFromFile(gl, gl.FRAGMENT_SHADER, fragmentShaderPath, definesSegment);
+    const vertPromise = loadShaderFromFile(gl, gl.VERTEX_SHADER, vertexShaderPath, prependPart);
+    const fragPromise = loadShaderFromFile(gl, gl.FRAGMENT_SHADER, fragmentShaderPath, prependPart);
     const program = gl.createProgram();
     assert(program !== null);
     gl.attachShader(program, await vertPromise);
@@ -33,9 +36,11 @@ export async function loadProgramFromFiles(gl: WebGLRenderingContext, vertexShad
 
 export async function loadShaderFromFile(gl: WebGLRenderingContext, type: GLenum, sourcePath: string, prependWith?: string): Promise<WebGLShader> {
     let source = await fetch(sourcePath).then(r => r.text());
-    if(prependWith !== undefined) {
+    if(prependWith !== undefined && prependWith.length > 0) {
         source = `${prependWith}\n${source}`;
     }
+    // console.log(sourcePath);
+    // console.log(source);
     const shader = gl.createShader(type);
     assert(shader !== null);
     gl.shaderSource(shader, source);

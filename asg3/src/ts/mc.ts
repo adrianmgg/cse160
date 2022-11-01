@@ -423,7 +423,7 @@ export class VChunk {
     }
 
     render(stuff: MyGlStuff, chunkX: number, chunkY: number, chunkZ: number): void {
-        const { gl, programInfo: { vars: { uniformLocations: { u_BlockPos, u_FragColor }, attribLocations: { a_Position, a_UV } } } } = stuff;
+        const { gl, programInfo: { vars: { uniformLocations: { u_BlockPos }, attribLocations: { a_Position, a_UV } } } } = stuff;
         if(this.meshVerts !== null && this.meshIndices !== null && this.meshUVs !== null) {
             if(a_Position !== null) {
                 gl.bindBuffer(gl.ARRAY_BUFFER, this.meshVerts);
@@ -441,8 +441,6 @@ export class VChunk {
             // TODO should probably add helpers for setting these rather than doing the null check every single time
             // our overall pos
             if(u_BlockPos !== null) gl.uniform3f(u_BlockPos, chunkX, chunkY, chunkZ);
-            // TODO remove this?
-            if(u_FragColor !== null) gl.uniform4f(u_FragColor, (chunkX % 256) / 255, (chunkY % 256) / 255, (chunkZ % 256) / 255, 1.0);
 
             // render
             gl.drawElements(gl.TRIANGLES, this.numIndices, gl.UNSIGNED_SHORT, 0);

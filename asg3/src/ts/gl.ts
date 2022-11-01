@@ -62,13 +62,12 @@ export async function loadShaderFromFile(gl: WebGLRenderingContext, type: GLenum
     return shader;
 }
 
-// TODO shorten uniformLocations/attribLocations to be less verbose
 export type ProgramVarLocations<
     Attribs extends readonly string[],
     Uniforms extends readonly string[],
 > = {
-    uniformLocations: Record<Uniforms[number], WebGLUniformLocation | null>;
-    attribLocations: Record<Attribs[number], GLint | null>;
+    uniform: Record<Uniforms[number], WebGLUniformLocation | null>;
+    attrib: Record<Attribs[number], GLint | null>;
 }
 
 /**
@@ -123,6 +122,6 @@ export function getProgramVarLocations<
             uniformLocations[name] = loc;
         }
     }
-    return {attribLocations, uniformLocations} as ProgramVarLocations<Attribs, Uniforms>;
+    return {attrib: attribLocations, uniform: uniformLocations} as ProgramVarLocations<Attribs, Uniforms>;
 }
 

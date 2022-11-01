@@ -375,7 +375,7 @@ export class VChunk {
         }
 
         this.deleteMesh(stuff);
-        const { glStuff: { gl, programInfo: { vars: { attribLocations: { a_Position } } } } } = stuff;
+        const { glStuff: { gl, program: { attrib: { a_Position } } } } = stuff;
 
         this.meshVerts = gl.createBuffer();
         assert(this.meshVerts !== null);
@@ -423,7 +423,7 @@ export class VChunk {
     }
 
     render(stuff: MyGlStuff, chunkX: number, chunkY: number, chunkZ: number): void {
-        const { gl, programInfo: { vars: { uniformLocations: { u_BlockPos }, attribLocations: { a_Position, a_UV } } } } = stuff;
+        const { gl, program: { uniform: { u_BlockPos }, attrib: { a_Position, a_UV } } } = stuff;
         if(this.meshVerts !== null && this.meshIndices !== null && this.meshUVs !== null) {
             if(a_Position !== null) {
                 gl.bindBuffer(gl.ARRAY_BUFFER, this.meshVerts);

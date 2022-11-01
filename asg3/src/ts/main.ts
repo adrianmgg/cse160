@@ -11,8 +11,7 @@ const forceWebgl1 = false;
 // making a type to hold all these so i can just pass them around instead of having global variables
 // for everything
 export type MyGlStuff = {
-    // gl: WebGLRenderingContext;
-    programInfo: MyProgramInfo;
+    program: MyProgramInfo;
 } & WebGL1Or2;
 
 export type WebGL1Or2 = (
@@ -36,7 +35,7 @@ async function main() {
     const glExtensions = setupGLExtensions(gl1or2);
     setupWebGL(gl1or2);
     const programInfo = await setupShaders(gl1or2, glExtensions);
-    const glStuff: MyGlStuff = {...gl1or2, programInfo};
+    const glStuff: MyGlStuff = {...gl1or2, program: programInfo};
     const atlas = atlasImages(await imagesPromise, 64);
     setupTextures(atlas, glStuff);
     // TODO temp debug thing, move this somewhere else
@@ -87,8 +86,7 @@ const SHADER_UNIFORM_NAMES = ['u_CameraMat', 'u_BlockPos', 'u_TextureAtlas', 'u_
 
 type MyProgramInfo = {
     program: WebGLProgram;
-    vars: ProgramVarLocations<typeof SHADER_ATTRIBUTE_NAMES, typeof SHADER_UNIFORM_NAMES>;
-};
+} & ProgramVarLocations<typeof SHADER_ATTRIBUTE_NAMES, typeof SHADER_UNIFORM_NAMES>;
 
 function setupGLExtensions({gl}: WebGL1Or2): Set<string> {
     const supportedExtensions = gl.getSupportedExtensions() ?? [];
@@ -124,11 +122,11 @@ async function setupShaders({gl, hasWebgl2}: WebGL1Or2, extensions: Set<string>)
     gl.useProgram(program);
     return {
         program: program,
-        vars: getProgramVarLocations(gl, program, SHADER_ATTRIBUTE_NAMES, SHADER_UNIFORM_NAMES),
+        ...getProgramVarLocations(gl, program, SHADER_ATTRIBUTE_NAMES, SHADER_UNIFORM_NAMES),
     };
 }
 
-function setupTextures(atlas: TextureAtlasInfo, { gl, hasWebgl2, programInfo: { vars: { uniformLocations: { u_TextureAtlas, u_MaxTextureAtlasLOD, u_TextureAtlasDimensions } } } }: MyGlStuff) {
+function setupTextures(atlas: TextureAtlasInfo, { gl, hasWebgl2, program: { uniform: { u_TextureAtlas, u_MaxTextureAtlasLOD, u_TextureAtlasDimensions } } }: MyGlStuff) {
     const texture = gl.createTexture();
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -192,7 +190,7 @@ function tick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     stuff.world.rebuildMeshes(stuff);
 
     // TODO buffer stuff here for now, should move
-    const { glStuff: { gl, programInfo: { vars: { uniformLocations: { u_CameraMat } } } } } = stuff;
+    const { glStuff: { gl, program: { uniform: { u_CameraMat } } } } = stuff;
     // gl.bufferData(gl.ARRAY_BUFFER, Mesh.UNIT_CUBE.verts, gl.STATIC_DRAW);
     // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Mesh.UNIT_CUBE.indices, gl.STATIC_DRAW);
 

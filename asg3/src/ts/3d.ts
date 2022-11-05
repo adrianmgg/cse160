@@ -354,7 +354,7 @@ export class Vec {
         return this;
     }
     cross(v: Vec): Vec {
-        return this.clone().cross(v);
+        return this.clone().crossInPlace(v);
     }
 
     dot(v: Vec): number {

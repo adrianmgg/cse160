@@ -10,6 +10,7 @@ function loadImgFromPath(path: string): Promise<HTMLImageElement> {
 
 function texName2Path(name: string): string {
     return `textures/${name}.png`;
+    // return `textures/debug.png`;
 }
 
 export async function loadImage(name: string): Promise<TexImageSource> {
@@ -157,12 +158,13 @@ class RectPacker<T> {
     }
 }
 
-function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number): TextureAtlasInfo | null {
+function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number, margin: number = 0): TextureAtlasInfo | null {
     assert(isPow2(atlasSize), 'texture atlas dimension must be a power of 2');
     const atlasPack = new RectPacker<AtlasBuilderInputItem>(atlasSize, atlasSize);
 
     for(const img of images) {
-        if(!(atlasPack.insertRect(img, img[1].width, img[1].height))) {
+        // if(!(atlasPack.insertRect(img, img[1].width, img[1].height))) {
+        if(!(atlasPack.insertRect(img, img[1].width + margin * 2, img[1].height + margin * 2))) {
             return null;
         }
     }
@@ -195,7 +197,10 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number): Textu
         if(name in texturePositions) {
             warnRateLimited(`duplicate texture name "${name}" in texture atlas, duplicates will be stored but only one will be accessible`);
         } else {
-            texturePositions[name] = new DOMRectReadOnly(rect.x / atlasSize, rect.y / atlasSize, rect.width / atlasSize, rect.height / atlasSize);
+            // texturePositions[name] = new DOMRectReadOnly(rect.x / atlasSize, rect.y / atlasSize, rect.width / atlasSize, rect.height / atlasSize);
+            texturePositions[name] = new DOMRectReadOnly((rect.x + margin) / atlasSize, (rect.y + margin) / atlasSize, (rect.width - margin * 2) / atlasSize, (rect.height - margin * 2) / atlasSize);
+            // const a = 1e-2;
+            // texturePositions[name] = new DOMRectReadOnly(rect.x / atlasSize, rect.y / atlasSize, (rect.width - a) / atlasSize, (rect.height - a) / atlasSize);
         }
     }
 
@@ -206,8 +211,21 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number): Textu
         let allWholeNumberSizes = true;
         for(const [rect, [name, tex]] of atlasPack.packedRects) {
             const mipScale = Math.pow(2, mipLevel);
-            let drawX = rect.x / mipScale, drawY = rect.y / mipScale, drawWidth = rect.width / mipScale, drawHeight = rect.height / mipScale;
+            // let drawX = rect.x / mipScale, drawY = rect.y / mipScale, drawWidth = rect.width / mipScale, drawHeight = rect.height / mipScale;
+            let drawX = (rect.x + margin) / mipScale, drawY = (rect.y + margin) / mipScale, drawWidth = (rect.width - margin * 2) / mipScale, drawHeight = (rect.height - margin * 2) / mipScale;
             allWholeNumberSizes &&= Number.isInteger(drawX) && Number.isInteger(drawY) && Number.isInteger(drawWidth) && Number.isInteger(drawHeight);
+            if(margin > 0) allWholeNumberSizes &&= Number.isInteger(margin / mipScale);
+            for(let a = margin / mipScale; a > 0; a--) {
+                mipCtx.drawImage(tex, drawX+a, drawY+a, drawWidth, drawHeight);
+                mipCtx.drawImage(tex, drawX+a, drawY-a, drawWidth, drawHeight);
+                mipCtx.drawImage(tex, drawX-a, drawY+a, drawWidth, drawHeight);
+                mipCtx.drawImage(tex, drawX-a, drawY-a, drawWidth, drawHeight);
+                // 
+                mipCtx.drawImage(tex, drawX+a, drawY, drawWidth, drawHeight);
+                mipCtx.drawImage(tex, drawX-a, drawY, drawWidth, drawHeight);
+                mipCtx.drawImage(tex, drawX, drawY+a, drawWidth, drawHeight);
+                mipCtx.drawImage(tex, drawX, drawY-a, drawWidth, drawHeight);
+            }
             mipCtx.drawImage(tex, drawX, drawY, drawWidth, drawHeight);
         }
         if(!passedMaxMipLevel) {

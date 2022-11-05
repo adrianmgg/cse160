@@ -10,13 +10,6 @@ export class Mat4x4 {
     // always going to return a number & therefore don't need undefined checks everywhere
     data: Float32Array & NTupleOf<number, 16>;
 
-    private static _IDENTITY = Mat4x4.of(
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1,
-    );
-
     /** @param data matrix's data, IN COLUMN-MAJOR ORDER */
     private constructor(data: Float32Array) {
         this.data = data as Float32Array & NTupleOf<number, 16>;
@@ -150,9 +143,13 @@ export class Mat4x4 {
     rotateZ(theta: number): Mat4x4 { return this.matmul(Mat4x4.rotateZ(theta)); }
     rotateZInPlace(theta: number): Mat4x4 { return this.matmulInPlace(Mat4x4.rotateZ(theta)); }
 
-    // TODO either we can have a single instance we return, OR we can have in-place operations. not both
     static identity(): Mat4x4 {
-        return Mat4x4._IDENTITY;
+        return Mat4x4.of(
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1,
+        );
     }
     static translate(x: number, y: number, z: number): Mat4x4 {
         return Mat4x4.of(
@@ -206,6 +203,19 @@ export class Mat4x4 {
             sin, cos, 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1,
+        );
+    }
+
+    // https://en.wikipedia.org/wiki/Rotation_matrix#Rotation_matrix_from_axis_and_angle
+    static rotate(theta: number, u: Vec): Mat4x4 {
+        const c = Math.cos(theta);
+        const s = Math.sin(theta);
+        const nc = 1 - c;
+        return Mat4x4.of(
+            c + (u.x * u.x) * nc    ,  u.x * u.y * nc - u.z - s,  u.x * u.z * nc + u.y * s,  0,
+            u.y * u.x * nc + u.z * s,  c + (u.x * u.x) * nc    ,  u.y * u.z * nc - u.x * s,  0,
+            u.z * u.x * nc - u.y * s,  u.z * u.y * nc + u.x * s,  c + (u.z * u.z) * nc    ,  0,
+            0                       ,  0                       ,  0                       ,  1,
         );
     }
 
@@ -271,15 +281,38 @@ export class Vec {
     }
 
     static fromSpherical(r: number, theta: number, phi: number): Vec {
+        theta += Math.PI / 2;
         const sinTheta = Math.sin(theta);
-        return Vec.of(r * sinTheta * Math.cos(phi), r * sinTheta * Math.sin(phi), r * Math.cos(theta));
+        return Vec.of(
+            r * sinTheta * Math.cos(phi),
+            r * Math.cos(theta),
+            r * sinTheta * Math.sin(phi),
+        );
     }
     static fromCylindrical(r: number, theta: number, y = 0): Vec {
         return Vec.of(r * Math.cos(theta), y, r * Math.sin(theta));
     }
+    static fromPolarXZ(r: number, theta: number): Vec {
+        return Vec.of(
+            r * Math.cos(theta),
+            0,
+            r * Math.sin(theta),
+        );
+    }
 
     magnitude(): number {
-        return Math.sqrt(this.x*this.x + this.y*this.y + this.z*this.z);
+        return Math.hypot(this.x, this.y, this.z);
+    }
+
+    normalizeInPlace(): Vec {
+        const m = this.magnitude();
+        this.x /= m;
+        this.y /= m;
+        this.z /= m;
+        return this;
+    }
+    normalized(): Vec {
+        return this.clone().normalizeInPlace();
     }
 
     addInPlace(a: Vec | number): Vec {
@@ -387,33 +420,82 @@ export class Vec {
 
 export class Camera {
     pos: Vec = Vec.zero();
-    gaze: Vec = Vec.forwards();
     up: Vec = Vec.up();
     nearPlane: number = 1e-2;
     farPlane: number = 1e4;
     fov: number = Math.PI / 2;
-    rotX: number = 0;
-    rotY: number = 0;
+    private _rotX: number = Math.PI / 2;
+    private _rotY: number = 0;
+    private _gaze: Vec | null = null;
 
-    /** point {@link Camera.gaze} towards the specified point */
-    gazeTowards(v: Vec) {
-        this.gaze = v.sub(this.pos);
+    get rotX(): number { return this._rotX; }
+    get rotY(): number { return this._rotY; }
+    set rotX(v: number) { this._rotX = v; this._gaze = null; }
+    set rotY(v: number) { this._rotY = v; this._gaze = null; }
+    get gaze(): Vec {
+        if(this._gaze === null) {
+            // const bar = Mat4x4.rotateY(this.rotX);
+            // // const foo = Mat4x4.rotateX(this.rotY);
+            // const foo = Mat4x4.identity().matmulInPlace(bar).rotateX(this.rotY).matmulInPlace(bar.inverse());
+            // const abc = bar.matmulInPlace(foo);
+            // this._gaze = Vec.forwards().transform(abc);
+
+            // const xGazeMat = Mat4x4.rotateY(this.rotX);
+            // const xGaze = Vec.forwards().transformInPlace(xGazeMat);
+            // const yGazeMat = Mat4x4.rotate(this.rotY, Vec.right().transformInPlace(xGazeMat));
+            // // xGaze.transformInPlace(yGazeMat);
+            // const gazeMat = xGazeMat.matmul(yGazeMat);
+            // this._gaze = Vec.forwards().transform(gazeMat);
+
+            // this._gaze = Vec.forwards().transformInPlace(
+            //     Mat4x4.locRotScale(0, 0, 0,  0, -this.rotX, 0,  1, 1, 1).matmulInPlace(Mat4x4.locRotScale(0, 0, 0,  -this.rotY, 0, 0,  1, 1, 1))
+            // );
+
+            // this._gaze = Vec.fromCylindrical(1, this.rotX, this.rotY);
+            // this.up = Vec.fromCylindrical(1, this.rotX, this.rotY + Math.PI / 2);
+
+            this._gaze = Vec.fromSpherical(1, this.rotY, this.rotX);
+            // this.up = Vec.fromCylindrical(1, this.rotX, this.rotY + Math.PI / 2);
+        }
+        return this._gaze;
     }
 
+    // TODO we can cache this if nothing changes
+    // TODO avoid the new mat creation every recompute
     private cameraMat(): Mat4x4 {
+        // const abc = Mat4x4.rotateXYZ(-this.rotY, -this.rotX, 0);
+        // // const up_ = this.up.transform(abc);
+
         const w = this.gaze.div(this.gaze.magnitude()).mul(-1);
         const up_cross_w = this.up.cross(w);
         const u = up_cross_w.div(up_cross_w.magnitude());
         const v = w.cross(u);
-        return Mat4x4.of(
+        const mat = Mat4x4.of(
             u.x, u.y, u.z, 0,
             v.x, v.y, v.z, 0,
             w.x, w.y, w.z, 0,
             0, 0, 0, 1
         ).translate(-this.pos.x, -this.pos.y, -this.pos.z);
-        // ).matmul(Mat4x4.locRotScale(this.pos.x, this.pos.y, this.pos.z, this.rotX, this.rotY, 0, 1, 1, 1).inverse())
-        // ).rotateY(-this.rotY).rotateX(-this.rotX).translate(-this.pos.x, -this.pos.y, -this.pos.z);
-        // ).matmul(Mat4x4.translate(this.pos.x, this.pos.y, this.pos.z).rotateY(this.rotY).rotateX(this.rotX).inverse());
+
+        // mat.rotateYInPlace(-this.rotX);
+        // mat.rotateXInPlace(this.rotY);
+
+        // mat.translateInPlace(-this.pos.x, -this.pos.y, -this.pos.z);
+
+        return mat;
+
+
+        // const z = this.pos.sub(this.gaze).normalizeInPlace();
+        // const x = z.cross(this.up).normalizeInPlace();
+        // const y = x.cross(z);
+        // // z.mulInPlace(-1);
+        // // build mat
+        // return Mat4x4.of(
+        //     x.x, x.y, x.z, -x.dot(this.gaze),
+        //     y.x, y.y, y.z, -y.dot(this.gaze),
+        //     z.x, z.y, z.z, -z.dot(this.gaze),
+        //     0, 0, 0, 1,
+        // ).translateInPlace(-this.pos.x, -this.pos.y, -this.pos.z);
     }
 
     private perspectiveMat(): Mat4x4 {
@@ -721,7 +803,7 @@ export class Quaternion {
     }
 
     norm(): number {
-        return Math.sqrt(this.v.x * this.v.x + this.v.y * this.v.y + this.v.z * this.v.z + this.w * this.w);
+        return Math.hypot(this.v.x, this.v.y, this.v.z, this.w);
     }
 
     normalizeInPlace(): Quaternion {

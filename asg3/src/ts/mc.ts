@@ -1,6 +1,6 @@
 import { idbOpen, idbRequest2Promise } from "./db.js";
 import { assert, debugAssert, Dict2D, NTupleOf, warnRateLimited } from "./util.js";
-import { Color, Mesh } from './3d.js';
+import { Color, Mesh, Vec } from './3d.js';
 import type { MyGlStuff, MyStuff } from "./main.js";
 import type { TextureAtlasInfo } from "./texture.js";
 
@@ -14,13 +14,6 @@ export enum Block {
     COBBLESTONE = 4,
     BEDROCK = 7,
 }
-
-// 0, 1, 2, 0, 2, 3, // front
-// 0, 3, 4, 0, 4, 5, // right
-// 0, 5, 6, 0, 6, 1, // up
-// 1, 6, 7, 1, 7, 2, // left
-// 7, 4, 3, 7, 3, 2, // down
-// 4, 7, 6, 4, 6, 5, // back
 
 enum CubeFace { FRONT = 0, RIGHT = 1, UP = 2, LEFT = 3, DOWN = 4, BACK = 5 };
 
@@ -59,6 +52,7 @@ const block_colors: Record<Block, Color> = {
 export class MCWorld {
     private readonly db: IDBDatabase;
     private readonly chunks: Dict2D<number, number, Chunk>;
+    private readonly renderDistance: number = 2;
 
     private constructor(db: IDBDatabase) {
         this.db = db;
@@ -83,36 +77,37 @@ export class MCWorld {
         const chunksStore = db.createObjectStore('chunks', { autoIncrement: false, keyPath: 'chunkPos' });
     }
 
-    async loadChunk(chunkX: number, chunkY: number): Promise<Chunk> {
-        const chunk = await this.dbGetOrCreateChunk(chunkX, chunkY);
-        this.chunks.set(chunkX, chunkY, chunk);
+    async loadChunk(chunkX: number, chunkZ: number): Promise<Chunk> {
+        // console.log(`loading chunk at ${chunkX},${chunkZ}`);
+        const chunk = await this.dbGetOrCreateChunk(chunkX, chunkZ);
+        this.chunks.set(chunkX, chunkZ, chunk);
         return chunk;
     }
 
     async unloadChunk(chunkX: number, chunkY: number): Promise<void> {
         const chunk = this.chunks.get(chunkX, chunkY);
         if(chunk === undefined) return;
-        console.log(`unloading chunk at ${chunkX},${chunkY}`);
+        // console.log(`unloading chunk at ${chunkX},${chunkY}`);
         await this.dbSaveChunk(chunk);
         this.chunks.del(chunkX, chunkY);
     }
 
-    private async dbGetChunk(chunkX: number, chunkY: number): Promise<Chunk | null> {
+    private async dbGetChunk(chunkX: number, chunkZ: number): Promise<Chunk | null> {
         const chunkData = await idbRequest2Promise<DBChunkData | undefined>(
             this.db.transaction('chunks', 'readonly')
                 .objectStore('chunks')
-                .get([chunkX, chunkY])
+                .get([chunkX, chunkZ])
         );
         if(chunkData === undefined) return null;
         else return await Chunk.fromDB(chunkData);
     }
 
-    private async dbGetOrCreateChunk(chunkX: number, chunkY: number): Promise<Chunk> {
-        const existingChunk = await this.dbGetChunk(chunkX, chunkY);
+    private async dbGetOrCreateChunk(chunkX: number, chunkZ: number): Promise<Chunk> {
+        const existingChunk = await this.dbGetChunk(chunkX, chunkZ);
         if(existingChunk !== null) {
             return existingChunk;
         }
-        const newChunk = await Chunk.newChunk(chunkX, chunkY);
+        const newChunk = await Chunk.newChunk(chunkX, chunkZ);
         // TODO do worldgen here (or maybe in newChunk)
         await idbRequest2Promise(
             this.db.transaction('chunks', 'readwrite')
@@ -123,7 +118,7 @@ export class MCWorld {
     }
 
     private async dbSaveChunk(chunk: Chunk) {
-        console.log(`saving chunk at ${chunk.chunkPos}`);
+        // console.log(`saving chunk at ${chunk.chunkPos}`);
         await idbRequest2Promise(
             this.db.transaction('chunks', 'readwrite')
                 .objectStore('chunks')
@@ -150,6 +145,60 @@ export class MCWorld {
             chunk.render(stuff);
         }
     }
+
+    // TODO should move player pos into world eventually, then this can be computed from that rather
+    //      than passed in
+    private playerChunkX: number = 0;
+    private playerChunkZ: number = 0;
+    updatePlayerPos(pos: Vec) {
+        this.playerChunkX = Math.floor(pos.x / 16);
+        this.playerChunkZ = Math.floor(pos.z / 16);
+    }
+    private shouldBeLoaded(chunkX: number, chunkZ: number): boolean {
+        return Math.max(Math.abs(this.playerChunkX - chunkX), Math.abs(this.playerChunkZ - chunkZ)) <= this.renderDistance;
+    }
+
+    private readonly unloadChunksJob: AsyncGenerator<void, void, void> = this.unloadChunksJobFunc();
+    private async *unloadChunksJobFunc(): AsyncGenerator<void, void, void> {
+        while(true) {
+            let didUnloadAny = false;
+            for(const [chunk, [chunkX, chunkZ]] of this.chunks) {
+                if(!this.shouldBeLoaded(chunkX, chunkZ)) {
+                    await this.unloadChunk(chunkX, chunkZ);
+                    yield;
+                    didUnloadAny = true;
+                }
+            }
+            // avoid infinite loop when there's no chunks to unload
+            if(!didUnloadAny) yield;
+        }
+    }
+
+    private readonly loadChunksJob: AsyncGenerator<void, void, void> = this.loadChunksJobFunc();
+    private async *loadChunksJobFunc(): AsyncGenerator<void, void, void> {
+        while(true) {
+            let didLoadAny = false;
+            // TODO should do the one closest to the player every time
+            for(let ox = -this.renderDistance; ox <= this.renderDistance; ox++) {
+                for(let oz = -this.renderDistance; oz <= this.renderDistance; oz++) {
+                    const x = this.playerChunkX + ox;
+                    const z = this.playerChunkZ + oz;
+                    if(this.shouldBeLoaded(x, z) && !this.chunks.has(x, z)) {
+                        await this.loadChunk(x, z);
+                        yield;
+                        didLoadAny = true;
+                    }
+                }
+            }
+            // avoid infinite loop when there's no chunks to load
+            if(!didLoadAny) yield;
+        }
+    }
+
+    async serverTick(): Promise<void> {
+        await this.unloadChunksJob.next();
+        await this.loadChunksJob.next();
+    }
 }
 
 type DBChunkData = {
@@ -161,8 +210,8 @@ type DBVChunkData = Uint8Array;
 export class Chunk {
     readonly chunkPos: Readonly<[number, number]>;
     readonly vChunks: NTupleOf<VChunk | null, 16>;
-    private constructor(chunkX: number, chunkY: number, vChunks: Chunk['vChunks']) {
-        this.chunkPos = [chunkX, chunkY];
+    private constructor(chunkX: number, chunkZ: number, vChunks: Chunk['vChunks']) {
+        this.chunkPos = [chunkX, chunkZ];
         this.vChunks = vChunks;
     }
 
@@ -201,14 +250,19 @@ export class Chunk {
 
     private async doWorldgen(): Promise<void> {
         console.log(`running worldgen for chunk ${this.chunkPos}`);
+        // this.fillArea(0,  0, 0, 15,  0, 15, Block.BEDROCK);
+        // this.fillArea(0,  1, 0, 15, 30, 15, Block.STONE);
+        // this.fillArea(0, 31, 0, 15, 33, 15, Block.DIRT);
+        // this.fillArea(0, 34, 0, 15, 34, 15, Block.GRASS);
         this.fillArea(0,  0, 0, 15,  0, 15, Block.BEDROCK);
         this.fillArea(0,  1, 0, 15, 30, 15, Block.STONE);
-        this.fillArea(0, 31, 0, 15, 33, 15, Block.DIRT);
-        this.fillArea(0, 34, 0, 15, 34, 15, Block.GRASS);
+        const dirtHeight = Math.floor(Math.random() * 4) + 1;
+        this.fillArea(0, 31, 0, 15, 31 + dirtHeight, 15, Block.DIRT);
+        this.fillArea(0, 31 + dirtHeight + 1, 0, 15, 31 + dirtHeight + 1, 15, Block.GRASS);
     }
 
-    static async newChunk(chunkX: number, chunkY: number): Promise<Chunk> {
-        const chunk = new Chunk(chunkX, chunkY, new Array<null>(16).fill(null) as NTupleOf<null, 16>);
+    static async newChunk(chunkX: number, chunkZ: number): Promise<Chunk> {
+        const chunk = new Chunk(chunkX, chunkZ, new Array<null>(16).fill(null) as NTupleOf<null, 16>);
         chunk.doWorldgen();
         return chunk;
     }

@@ -47,6 +47,7 @@ export class Dict2D<
     TValue extends object | string | number | boolean | bigint | symbol | null,
 > implements Iterable<readonly [TValue, readonly [TKeyOuter, TKeyInner]]> {
     private readonly data: {[K1 in TKeyOuter]?: {[K2 in TKeyInner]?: TValue}} = {};
+    size: number = 0;
 
     public get(a: TKeyOuter, b: TKeyInner): TValue | undefined {
         return this.data[a]?.[b];
@@ -61,10 +62,12 @@ export class Dict2D<
     }
 
     public set(a: TKeyOuter, b: TKeyInner, v: TValue): void {
+        if(!this.has(a, b)) this.size++;
         this.getOrCreateRow(a)[b] = v;
     }
 
     public del(a: TKeyOuter, b: TKeyInner): void {
+        if(this.has(a, b)) this.size--;
         const row = this.data[a];
         if(row === undefined) return;
         delete row[b];

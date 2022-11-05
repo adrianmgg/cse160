@@ -65,7 +65,7 @@ async function main() {
     const inputInfo: InputInfo = {heldKeys: new Set(), pressedKeys: new Set(), releasedKeys: new Set()};
     const stuff: MyStuff = {glStuff, camera, world, atlas, input: inputInfo};
     // TODO should load/restore player pos
-    camera.pos = Vec.of(8, 32, 16+8);
+    camera.pos = Vec.of(8, 40, 8);
     camera.rotX = Math.PI * (-1/2);
     // camera.pos = Vec.of(8, 50, 8);
     // camera.gaze = Vec.DOWN;
@@ -122,7 +122,8 @@ async function main() {
     // store these on the global scope. purely for easier debugging, none of our code will use it
     // @ts-expect-error
     window.mcStuff = stuff;
-    requestAnimationFrame(tick.bind(null, stuff));
+    requestAnimationFrame(renderTick.bind(null, stuff));
+    setTimeout(serverTick.bind(null, stuff), 0);
 }
 
 function initWebGL(canvas: HTMLCanvasElement): WebGL1Or2 {
@@ -203,8 +204,8 @@ function setupTextures(atlas: TextureAtlasInfo, { gl, hasWebgl2, program: { unif
     // TODO add an option to toggle this between NEAREST_MIPMAP_NEAREST and NEAREST_MIPMAP_LINEAR
     // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST);
-    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR);
     // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
     // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     // clamp texture at edges
@@ -226,9 +227,15 @@ async function setupWorld(): Promise<MCWorld> {
     return await MCWorld.openWorld('new world');
 }
 
-let lastTick = 0; // maybe shouldn't be global if we're trying to not be
-function tick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
-    let delta = now - lastTick;
+async function serverTick(stuff: MyStuff) {
+    stuff.world.updatePlayerPos(stuff.camera.pos);
+    await stuff.world.serverTick();
+    setTimeout(() => serverTick(stuff), 1);
+}
+
+let lastRenderTick = 0; // maybe shouldn't be global if we're trying to not be
+function renderTick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
+    let delta = now - lastRenderTick;
     clearCanvas(stuff.glStuff);
 
     const { camera, input: { heldKeys } } = stuff;
@@ -286,8 +293,8 @@ function tick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     // =====
     stuff.input.pressedKeys.clear();
     stuff.input.releasedKeys.clear();
-    lastTick = now;
-    requestAnimationFrame(tick.bind(null, stuff));
+    lastRenderTick = now;
+    requestAnimationFrame(renderTick.bind(null, stuff));
 }
 
 window.addEventListener('DOMContentLoaded', main);

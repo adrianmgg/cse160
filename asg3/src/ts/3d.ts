@@ -408,6 +408,26 @@ export class Vec {
     }
     transform(mat: Mat4x4): Vec { return this.clone().transformInPlace(mat); }
 
+    floorInPlace(): Vec {
+        this.x = Math.floor(this.x);
+        this.y = Math.floor(this.y);
+        this.z = Math.floor(this.z);
+        return this;
+    }
+    floor(): Vec {
+        return this.clone().floorInPlace();
+    }
+
+    signInPlace(): Vec {
+        this.x = Math.sign(this.x);
+        this.y = Math.sign(this.y);
+        this.z = Math.sign(this.z);
+        return this;
+    }
+    sign(): Vec {
+        return this.clone().signInPlace();
+    }
+
     static zero()       { return Vec.of( 0,  0,  0); }
     static one()        { return Vec.of( 1,  1,  1); }
     static up()         { return Vec.of( 0,  1,  0); }

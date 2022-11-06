@@ -199,6 +199,92 @@ export class MCWorld {
         await this.unloadChunksJob.next();
         await this.loadChunksJob.next();
     }
+
+    private getBlock(x: number, y: number, z: number): Block {
+        if(y < 0 || y > 255) return Block.AIR;
+        const cX = Math.floor(x / 16);
+        const cZ = Math.floor(z / 16);
+        return this.chunks.get(cX, cZ)?.getBlock(x - (cX * 16), y, z - (cZ * 16)) ?? Block.AIR;
+    }
+
+    setBlock(x: number, y: number, z: number, block: Block) {
+        const cX = Math.floor(x / 16);
+        const cZ = Math.floor(z / 16);
+        const chunk = this.chunks.get(cX, cZ);
+        assert(chunk !== undefined, 'tried to set block in unloaded chunk');
+        chunk.setBlock(x - (cX * 16), y, z - (cZ * 16), block);
+    }
+
+    // implementation of "A fast voxel traversal algorithm for ray tracing." by John Amanatides and Andrew Woo
+    intersect(pos: Vec, dir: Vec, maxDistance: number): null | readonly [Vec, Block] {
+        // "The initialization phase begins by identifying the voxel in which the ray origin is
+        //  found"
+        let curBlockPos = pos.floor();
+        // "stepX and stepY are initialized to either 1 or -1 indicating whether X and Y are
+        //  incremented or decremented as the ray crosses voxel boundaries (this is determined by
+        //  the sign of the x and y components of v)""
+        let step = dir.sign();
+        // "determine the value of t at which the ray crosses the first ... voxel boundary"
+        const maxT = curBlockPos.add(step).subInPlace(pos).divInPlace(dir);
+        // "compute ... how far along the ray we must move (in units of t) for the ... component of
+        //  such a movement to equal the width of a voxel"
+        const delta = step.div(dir);
+
+        if(Number.isNaN(maxT.x)) maxT.x = Infinity;
+        if(Number.isNaN(maxT.y)) maxT.y = Infinity;
+        if(Number.isNaN(maxT.z)) maxT.z = Infinity;
+        if(Number.isNaN(delta.x)) delta.x = 0;
+        if(Number.isNaN(delta.y)) delta.y = 0;
+        if(Number.isNaN(delta.z)) delta.z = 0;
+
+        // if(dir.x === 0 && dir.z === 0 && dir.y !== 0) {
+        //     // console.log({dir, step, maxT, delta, curBlockPos: curBlockPos.clone()});
+        //     console.log(curBlockPos.add(step), curBlockPos.add(step).subInPlace(pos), curBlockPos.add(step).subInPlace(pos).divInPlace(dir));
+        // }
+
+        // incremental phase
+        // (i've modified the algorithm to use a maximum distance cutoff rather than preset bounds)
+        let distanceSoFarPrev: number | null = null;
+        let distanceSoFar: number = 0;
+        while(true) {
+            // console.log(distanceSoFar);
+            // check current block
+            const curBlock = this.getBlock(curBlockPos.x, curBlockPos.y, curBlockPos.z);
+            if(curBlock !== Block.AIR) {
+                // return [pos.add(dir.mul(distanceSoFar)), ] as const;
+                return [curBlockPos, curBlock];
+            }
+
+            // do the next incremental phase
+            if(maxT.x < maxT.y) {
+                if(maxT.x < maxT.z) {
+                    curBlockPos.x += step.x;
+                    maxT.x += delta.x;
+                    distanceSoFar += delta.x;
+                } else {
+                    curBlockPos.z += step.z;
+                    maxT.z += delta.z;
+                    distanceSoFar += delta.z;
+                }
+            } else {
+                if(maxT.y < maxT.z) {
+                    curBlockPos.y += step.y;
+                    maxT.y += delta.y;
+                    distanceSoFar += delta.y;
+                } else {
+                    curBlockPos.z += step.z;
+                    maxT.z += delta.z;
+                    distanceSoFar += delta.z;
+                }
+            }
+
+            if(distanceSoFar > maxDistance || distanceSoFar === distanceSoFarPrev) {
+                break;
+            }
+            distanceSoFarPrev = distanceSoFar;
+        } // while(distanceSoFar <= maxDistance);
+        return null;
+    }
 }
 
 type DBChunkData = {
@@ -215,15 +301,26 @@ export class Chunk {
         this.vChunks = vChunks;
     }
 
+    private getVChunk(vChunkY: number): VChunk | null {
+        const vc = this.vChunks[vChunkY];
+        assert(vc !== undefined, 'vchunk index out of range');
+        return vc;
+    }
     private getOrCreateVChunk(vChunkY: number): VChunk {
-        const existingVC = this.vChunks[vChunkY];
-        assert(existingVC !== undefined, 'vchunk index out of range');
+        const existingVC = this.getVChunk(vChunkY);
         if(existingVC !== null) return existingVC;
         return this.vChunks[vChunkY] = VChunk.newVChunk();
     }
 
     private static vcIdx(y: number): number {
         return y >> 4; // floor(y / 16)
+    }
+
+    getBlock(x: number, y: number, z: number): Block {
+        const vcY = Chunk.vcIdx(y);
+        const vc = this.getVChunk(vcY);
+        if(vc === null || vc === undefined) return Block.AIR;
+        else return vc.getBlock(x, y - (vcY * 16), z);
     }
 
     setBlock(x: number, y: number, z: number, block: Block) {

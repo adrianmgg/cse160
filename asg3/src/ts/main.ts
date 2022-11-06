@@ -1,6 +1,6 @@
 import { Camera, Mesh, Vec, Mat4x4 } from './3d.js';
 import { getProgramVarLocations, loadProgramFromFiles, ProgramVarLocations } from './gl.js';
-import { MCWorld } from './mc.js';
+import { Block, MCWorld } from './mc.js';
 import { atlasImages, loadImages, TextureAtlasInfo } from './texture.js';
 import { assert } from "./util.js";
 
@@ -32,6 +32,9 @@ type InputInfo = {
     heldKeys: Set<string>;
     pressedKeys: Set<string>;
     releasedKeys: Set<string>;
+    heldMouseButtons: Set<number>;
+    pressedMouseButtons: Set<number>;
+    releasedMouseButtons: Set<number>;
 };
 
 async function main() {
@@ -62,7 +65,10 @@ async function main() {
     // setupUI();
     const world = await setupWorld();
     const camera = new Camera();
-    const inputInfo: InputInfo = {heldKeys: new Set(), pressedKeys: new Set(), releasedKeys: new Set()};
+    const inputInfo: InputInfo = {
+        heldKeys: new Set(), pressedKeys: new Set(), releasedKeys: new Set(),
+        heldMouseButtons: new Set(), pressedMouseButtons: new Set(), releasedMouseButtons: new Set(),
+    };
     const stuff: MyStuff = {glStuff, camera, world, atlas, input: inputInfo};
     // TODO should load/restore player pos
     camera.pos = Vec.of(8, 40, 8);
@@ -73,23 +79,18 @@ async function main() {
     // TODO move these functions out
     let downKeys = new Set<string>();
     function mouseMoveDuringPointerLock(ev: MouseEvent) {
-        // console.log(ev.movementX, ev.movementY);
-        // const rot = Mat4x4.rotateXYZ(ev.movementY / 100, ev.movementX / 100, 0);
-        // camera.gaze.transformInPlace(rot);
-        // camera.up.transformInPlace(rot);
-        // camera.rotX += ev.movementY / 100;
-        // camera.rotY += ev.movementX / 100;
-
         camera.rotX = (camera.rotX + ev.movementX / 100) % (Math.PI * 2);
-        // camera.rotY = Math.max(0, Math.min(Math.PI, (camera.rotY - ev.movementY / 100)));
         camera.rotY = Math.max(Math.PI / -2, Math.min(Math.PI / 2, (camera.rotY + ev.movementY / 100)));
-        // camera.rotY = Math.max(Math.PI / -4, Math.min(Math.PI / 4, (camera.rotY - ev.movementY / 100)));
-        // console.log(camera.rotX, camera.rotY);
-
-        // const a = Vec.fromSpherical(1, camera.rotX, camera.rotY);
-        // camera.gaze.x = a.z;
-        // camera.gaze.y = a.x;
-        // camera.gaze.z = a.y;
+    }
+    function mousedownDuringPointerLock(ev: MouseEvent) {
+        inputInfo.heldMouseButtons.add(ev.button);
+        inputInfo.pressedMouseButtons.add(ev.button);
+        inputInfo.releasedMouseButtons.delete(ev.button);
+    }
+    function mouseupDuringPointerLock(ev: MouseEvent) {
+        inputInfo.heldMouseButtons.delete(ev.button);
+        inputInfo.pressedMouseButtons.delete(ev.button);
+        inputInfo.releasedMouseButtons.add(ev.button);
     }
     function keydownDuringPointerLock(ev: KeyboardEvent) {
         if(ev.repeat) return;
@@ -107,12 +108,16 @@ async function main() {
         canvas.addEventListener('mousemove', mouseMoveDuringPointerLock, {capture: false});
         document.addEventListener('keydown', keydownDuringPointerLock, {capture: false});
         document.addEventListener('keyup', keyupDuringPointerLock, {capture: false});
+        document.addEventListener('mousedown', mousedownDuringPointerLock, {capture: false});
+        document.addEventListener('mouseup', mouseupDuringPointerLock, {capture: false});
     });
     document.addEventListener('pointerlockchange', ev => {
         if(document.pointerLockElement !== canvas) {
             canvas.removeEventListener('mousemove', mouseMoveDuringPointerLock, {capture: false});
             document.removeEventListener('keydown', keydownDuringPointerLock, {capture: false});
             document.removeEventListener('keyup', keyupDuringPointerLock, {capture: false});
+            document.removeEventListener('mousedown', mousedownDuringPointerLock, {capture: false});
+            document.removeEventListener('mouseup', mouseupDuringPointerLock, {capture: false});
             inputInfo.heldKeys.clear();
             inputInfo.pressedKeys.clear();
             inputInfo.releasedKeys.clear(); // TODO populate this properly
@@ -238,7 +243,7 @@ function renderTick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     let delta = now - lastRenderTick;
     clearCanvas(stuff.glStuff);
 
-    const { camera, input: { heldKeys } } = stuff;
+    const { world, camera, input: { heldKeys, pressedMouseButtons } } = stuff;
     // console.log(heldKeys);
     const posDelta = Vec.zero();
     if(heldKeys.has('KeyW')) { posDelta.addInPlace(Vec.fromPolarXZ(delta / 100, camera.rotX)); }
@@ -247,7 +252,21 @@ function renderTick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     if(heldKeys.has('KeyD')) { posDelta.addInPlace(Vec.fromPolarXZ(delta / 100, camera.rotX + Math.PI / 2)); }
     if(heldKeys.has('Space')) { posDelta.y += delta / 100; }
     if(heldKeys.has('ShiftLeft')) { posDelta.y -= delta / 100; }
-    camera.pos = camera.pos.add(posDelta);
+    camera.pos.addInPlace(posDelta);
+    // camera.pos = camera.pos.add(posDelta);
+    // const posCollision = world.intersect(camera.pos, posDelta.normalized(), posDelta.magnitude() + 1);
+    // if(posCollision !== null) console.log('collides');
+    // if(posCollision === null) {
+    //     camera.pos.addInPlace(posDelta);
+    // }
+
+    const viewTargetCollision = world.intersect(camera.pos, camera.gaze, 6);
+    if(viewTargetCollision !== null) {
+        const [blockPos, block] = viewTargetCollision;
+        if(pressedMouseButtons.has(0)) {
+            world.setBlock(blockPos.x, blockPos.y, blockPos.z, Block.AIR);
+        }
+    }
 
     // stuff.camera.gaze = Vec.fromCylindrical(1, now / 1000, 0);
     // stuff.camera.pos = Vec.of(10, 0, 10);
@@ -293,6 +312,8 @@ function renderTick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     // =====
     stuff.input.pressedKeys.clear();
     stuff.input.releasedKeys.clear();
+    stuff.input.pressedMouseButtons.clear();
+    stuff.input.releasedMouseButtons.clear();
     lastRenderTick = now;
     requestAnimationFrame(renderTick.bind(null, stuff));
 }

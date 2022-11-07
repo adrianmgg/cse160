@@ -3,6 +3,7 @@ import { assert, debugAssert, Dict2D, NTupleOf, warnRateLimited } from "./util.j
 import { Color, Mesh, Vec } from './3d.js';
 import type { MyGlStuff, MyStuff } from "./main.js";
 import type { TextureAtlasInfo } from "./texture.js";
+import { PerlinNoise } from "./noise.js";
 
 const MC_WORLD_IDB_VERSION = 1 as const;
 
@@ -53,10 +54,12 @@ export class MCWorld {
     private readonly db: IDBDatabase;
     private readonly chunks: Dict2D<number, number, Chunk>;
     private readonly renderDistance: number = 2;
+    private readonly noise: PerlinNoise;
 
     private constructor(db: IDBDatabase) {
         this.db = db;
         this.chunks = new Dict2D();
+        this.noise = new PerlinNoise(5489);
     }
 
     static async openWorld(worldName: string): Promise<MCWorld> {
@@ -107,12 +110,12 @@ export class MCWorld {
         if(existingChunk !== null) {
             return existingChunk;
         }
-        const newChunk = await Chunk.newChunk(chunkX, chunkZ);
+        const newChunk = await Chunk.newChunk(chunkX, chunkZ, this.noise);
         // TODO do worldgen here (or maybe in newChunk)
         await idbRequest2Promise(
             this.db.transaction('chunks', 'readwrite')
                 .objectStore('chunks')
-                .add(newChunk.toDB())
+                .put(newChunk.toDB())
         );
         return newChunk;
     }
@@ -301,6 +304,9 @@ export class Chunk {
         this.vChunks = vChunks;
     }
 
+    get chunkX(): number { return this.chunkPos[0]; }
+    get chunkZ(): number { return this.chunkPos[1]; }
+
     private getVChunk(vChunkY: number): VChunk | null {
         const vc = this.vChunks[vChunkY];
         assert(vc !== undefined, 'vchunk index out of range');
@@ -345,22 +351,35 @@ export class Chunk {
         }
     }
 
-    private async doWorldgen(): Promise<void> {
+    private async doWorldgen(noise: PerlinNoise): Promise<void> {
         console.log(`running worldgen for chunk ${this.chunkPos}`);
         // this.fillArea(0,  0, 0, 15,  0, 15, Block.BEDROCK);
         // this.fillArea(0,  1, 0, 15, 30, 15, Block.STONE);
         // this.fillArea(0, 31, 0, 15, 33, 15, Block.DIRT);
         // this.fillArea(0, 34, 0, 15, 34, 15, Block.GRASS);
-        this.fillArea(0,  0, 0, 15,  0, 15, Block.BEDROCK);
-        this.fillArea(0,  1, 0, 15, 30, 15, Block.STONE);
-        const dirtHeight = Math.floor(Math.random() * 4) + 1;
-        this.fillArea(0, 31, 0, 15, 31 + dirtHeight, 15, Block.DIRT);
-        this.fillArea(0, 31 + dirtHeight + 1, 0, 15, 31 + dirtHeight + 1, 15, Block.GRASS);
+        // this.fillArea(0,  0, 0, 15,  0, 15, Block.BEDROCK);
+        // this.fillArea(0,  1, 0, 15, 30, 15, Block.STONE);
+        // const dirtHeight = Math.floor(Math.random() * 4) + 1;
+        // this.fillArea(0, 31, 0, 15, 31 + dirtHeight, 15, Block.DIRT);
+        // this.fillArea(0, 31 + dirtHeight + 1, 0, 15, 31 + dirtHeight + 1, 15, Block.GRASS);
+        const worldScale = 16 / 18.712891738912;
+        for(let x = 0; x < 16; x++) {
+            for(let z = 0; z < 16; z++) {
+                const sample = noise.sample((this.chunkX + (x / 16)) * worldScale, (this.chunkZ + (z / 16)) * worldScale) / 2 + 0.5;
+                // const sample = noise.sample((this.chunkX*16 + x) / 32, (this.chunkZ*16 + z) / 32) / 2 + 0.5;
+                const height = 30 + Math.floor(sample * 16);
+                // const height = (this.chunkX*16+x) % 200;
+                this.fillArea(x, 0, z, x, height, z, Block.STONE);
+                this.setBlock(x, 0, z, Block.BEDROCK);
+                this.fillArea(x, height + 1, z, x, height + 3, z, Block.DIRT);
+                this.setBlock(x, height + 4, z, Block.GRASS);
+            }
+        }
     }
 
-    static async newChunk(chunkX: number, chunkZ: number): Promise<Chunk> {
+    static async newChunk(chunkX: number, chunkZ: number, noise: PerlinNoise): Promise<Chunk> {
         const chunk = new Chunk(chunkX, chunkZ, new Array<null>(16).fill(null) as NTupleOf<null, 16>);
-        chunk.doWorldgen();
+        chunk.doWorldgen(noise);
         return chunk;
     }
 

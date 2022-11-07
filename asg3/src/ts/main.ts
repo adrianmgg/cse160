@@ -205,6 +205,7 @@ function setupTextures(atlas: TextureAtlasInfo, { gl, hasWebgl2, program: { unif
     }
     // nearest neighbor for magnification
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     // nearest neighbor with mip maps for minification
     // TODO add an option to toggle this between NEAREST_MIPMAP_NEAREST and NEAREST_MIPMAP_LINEAR
     // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
@@ -239,6 +240,7 @@ async function serverTick(stuff: MyStuff) {
 }
 
 let lastRenderTick = 0; // maybe shouldn't be global if we're trying to not be
+let movementSpeed = 1.0;
 function renderTick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     let delta = now - lastRenderTick;
     clearCanvas(stuff.glStuff);
@@ -252,6 +254,7 @@ function renderTick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     if(heldKeys.has('KeyD')) { posDelta.addInPlace(Vec.fromPolarXZ(delta / 100, camera.rotX + Math.PI / 2)); }
     if(heldKeys.has('Space')) { posDelta.y += delta / 100; }
     if(heldKeys.has('ShiftLeft')) { posDelta.y -= delta / 100; }
+    posDelta.mulInPlace(movementSpeed);
     camera.pos.addInPlace(posDelta);
     // camera.pos = camera.pos.add(posDelta);
     // const posCollision = world.intersect(camera.pos, posDelta.normalized(), posDelta.magnitude() + 1);

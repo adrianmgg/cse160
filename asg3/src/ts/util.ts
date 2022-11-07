@@ -129,3 +129,8 @@ export function isPow2(n: number): boolean {
     // TODO probably better to do this a bit fiddly way instead?
     return Math.log2(n) % 1 === 0;
 }
+
+export function lerp(a: number, b: number, t: number): number {
+    // return a * t + b * (1 - t);
+    return (1-t)*a + t*b;
+}

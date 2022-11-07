@@ -158,7 +158,7 @@ class RectPacker<T> {
     }
 }
 
-function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number, margin: number = 0): TextureAtlasInfo | null {
+function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number, margin: number = 16): TextureAtlasInfo | null {
     assert(isPow2(atlasSize), 'texture atlas dimension must be a power of 2');
     const atlasPack = new RectPacker<AtlasBuilderInputItem>(atlasSize, atlasSize);
 

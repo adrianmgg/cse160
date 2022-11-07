@@ -22,6 +22,8 @@ export function setupDebugToggles() {
             if(!debugToggles.has(toggleName)) searchParams.append(toggleName, '1');
             window.location.search = searchParams.toString();
         });
+        toggleButton.classList.add('debug-toggle');
+        toggleButton.dataset["enabled"] = debugToggles.has(toggleName) ? "true" : "false";
         toggleButton.textContent = (debugToggles.has(toggleName) ? 'disable' : 'enable') + ` ${toggleName}`;
         togglesContainer.appendChild(toggleButton);
     }

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>Assignment 2</title>
+    <title>Assignment 3</title>
     <link rel="stylesheet" href="style.css">
     <script src="js/main.js" type="module"></script>
 </head>
@@ -13,6 +13,8 @@
     <details open><summary>debug toggles</summary>
         note: changing most of these WILL reload the page
         <div id="debug_toggles_container"></div>
+        <!-- TODO do these properly in the code rather than these temp onX inline events -->
+        <br><label>render distance <input type="number" min="0" step="1" value="2" onchange="mcStuff.world.renderDistance = this.value" oninput="mcStuff.world.renderDistance = this.value"></label>
         <br><button onclick="indexedDB.deleteDatabase('new world')">delete saved world data (requires manual reload)</button>
     </details>
     <div id="ui_container"></div>
@@ -22,6 +24,7 @@
             <details open><summary>controls</summary>
                 <ul>
                     <li>click the canvas to start controlling the game. w/a/s/d = move, q/e or mouse = turn, left click = break block, shift/space = fly up/down</li>
+                    <li>you can turn on the <code>fast_movement</code> debug toggle to navigate the world faster</li>
                 </ul>
             </details>
             <details open><summary>technical details</summary>
@@ -31,7 +34,6 @@
                     <li>world is saved to & loaded from disk using IndexedDB api <ul>
                         <li>(currently only happens when chunks are unloaded from leaving render distance, so you'll need to walk away until the chunk exits render distance, but after that you can reload the window and any changes made will still be there)</li>
                     </ul></li>
-                    <li>currently no ui for changing render distance, but you can do it from the browser console like this: <code>mcStuff.world.renderDistance = 10</code></li>
                     <li>texture atlases are generated at runtime, and mipmap generation is done manually to avoid any bleed between the aliased textures<ul>
                         <li>as you can see below, some of the higher mipmap levels (the ones outlined in red) are too small and wouldn't look right when rendered. I use two different methods for solving this <ul>
                             <li>if webgl 2 is supported by the browser I use that and set the maximum LOD for the texture (not supported on webgl 1)</li>
@@ -46,9 +48,10 @@
             <details open><summary>known bugs</summary>
                 <ul>
                     <li>looking directly up results in nothing being rendered</li>
+                    <li>camera direction sometimes jumps around when exiting pointer capture</li>
                 </ul>
             </details>
-            <details open><summary>missing features/stuff I wanted to add</summary>
+            <details open><summary>missing features/stuff I wanted to add but didn't get around to</summary>
                 <ul>
                     <li>ability to place blocks</li>
                     <li>collision/physics</li>

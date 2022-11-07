@@ -71,7 +71,7 @@ async function main() {
     };
     const stuff: MyStuff = {glStuff, camera, world, atlas, input: inputInfo};
     // TODO should load/restore player pos
-    camera.pos = Vec.of(8, 40, 8);
+    camera.pos = Vec.of(8, 50, 8);
     camera.rotX = Math.PI * (-1/2);
     // camera.pos = Vec.of(8, 50, 8);
     // camera.gaze = Vec.DOWN;
@@ -151,7 +151,7 @@ function setupWebGL({gl}: WebGL1Or2) {
 }
 
 const SHADER_ATTRIBUTE_NAMES = ['a_Position', 'a_UV'] as const;
-const SHADER_UNIFORM_NAMES = ['u_CameraMat', 'u_BlockPos', 'u_TextureAtlas', 'u_MaxTextureAtlasLOD', 'u_TextureAtlasDimensions'] as const;
+const SHADER_UNIFORM_NAMES = ['u_CameraMat', 'u_BlockPos', 'u_TextureAtlas', 'u_MaxTextureAtlasLOD', 'u_TextureAtlasDimensions', 'u_Color'] as const;
 
 type MyProgramInfo = {
     program: WebGLProgram;
@@ -254,6 +254,8 @@ function renderTick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     if(heldKeys.has('KeyD')) { posDelta.addInPlace(Vec.fromPolarXZ(delta / 100, camera.rotX + Math.PI / 2)); }
     if(heldKeys.has('Space')) { posDelta.y += delta / 100; }
     if(heldKeys.has('ShiftLeft')) { posDelta.y -= delta / 100; }
+    if(heldKeys.has('KeyQ')) { camera.rotX -= delta / 100 / 5; }
+    if(heldKeys.has('KeyE')) { camera.rotX += delta / 100 / 5; }
     posDelta.mulInPlace(movementSpeed);
     camera.pos.addInPlace(posDelta);
     // camera.pos = camera.pos.add(posDelta);
@@ -263,12 +265,15 @@ function renderTick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     //     camera.pos.addInPlace(posDelta);
     // }
 
-    const viewTargetCollision = world.intersect(camera.pos, camera.gaze, 6);
+    const viewTargetCollision = world.intersect(camera.pos, camera.gaze, 12);
     if(viewTargetCollision !== null) {
         const [blockPos, block] = viewTargetCollision;
+        world.focusBlock(blockPos);
         if(pressedMouseButtons.has(0)) {
             world.setBlock(blockPos.x, blockPos.y, blockPos.z, Block.AIR);
         }
+    } else {
+        world.focusBlock(null);
     }
 
     // stuff.camera.gaze = Vec.fromCylindrical(1, now / 1000, 0);
@@ -324,8 +329,7 @@ function renderTick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
 window.addEventListener('DOMContentLoaded', main);
 
 function clearCanvas({ gl }: MyGlStuff) {
-    gl.clearColor(.8, .8, .8, 1.0);
-    // gl.clearColor(1., 0., 1., 1.0);
+    gl.clearColor(0.44313725490196076, 0.6862745098039216, 0.9686274509803922, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 }
 

@@ -143,9 +143,34 @@ export class MCWorld {
         }
     }
 
+    private static readonly BLOCKSELECT_CUBE_POINTS = new Float32Array([
+        0,0,0, 0,0,1,  0,0,1, 0,1,1,  0,1,1, 0,1,0,  0,1,0, 0,0,0,
+        1,0,0, 1,0,1,  1,0,1, 1,1,1,  1,1,1, 1,1,0,  1,1,0, 1,0,0,
+        0,0,0, 1,0,0,  0,0,1, 1,0,1,  0,1,1, 1,1,1,  0,1,0, 1,1,0,
+    ].map(n => (n - 0.5) * 1.01 + 0.5));
+    private blockSelectBuf: WebGLBuffer | null = null; // TODO handle this better
     render(stuff: MyGlStuff): void {
+        const { gl, program: { attrib: { a_Position }, uniform: { u_BlockPos, u_Color } } } = stuff;
+        if(u_Color !== null) gl.uniform4f(u_Color, 0, 0, 0, 0);
         for(const [chunk] of this.chunks) {
             chunk.render(stuff);
+        }
+        // TODO scissor section in a corner & draw a minimap?
+        // TODO should do this stuff elsewhere
+        if(this.blockSelectBuf === null) {
+            this.blockSelectBuf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.blockSelectBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, MCWorld.BLOCKSELECT_CUBE_POINTS, gl.STATIC_DRAW);
+        }
+        if(this.focusedBlockPos !== null) {
+            if(a_Position !== null) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.blockSelectBuf);
+                gl.enableVertexAttribArray(a_Position);
+                gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+            }
+            if(u_BlockPos !== null) gl.uniform3f(u_BlockPos, this.focusedBlockPos.x, this.focusedBlockPos.y, this.focusedBlockPos.z);
+            if(u_Color !== null) gl.uniform4f(u_Color, 0, 1, 0, 1);
+            gl.drawArrays(gl.LINES, 0, MCWorld.BLOCKSELECT_CUBE_POINTS.length / 3);
         }
     }
 
@@ -216,6 +241,11 @@ export class MCWorld {
         const chunk = this.chunks.get(cX, cZ);
         assert(chunk !== undefined, 'tried to set block in unloaded chunk');
         chunk.setBlock(x - (cX * 16), y, z - (cZ * 16), block);
+    }
+
+    private focusedBlockPos: Vec | null = null;
+    focusBlock(v: Vec | null) {
+        this.focusedBlockPos = (v === null) ? null : v.clone();
     }
 
     // implementation of "A fast voxel traversal algorithm for ray tracing." by John Amanatides and Andrew Woo
@@ -505,13 +535,7 @@ export class VChunk {
         [CubeFace.BACK]:  [[0,1,2], [0,2,3]],
     } as const;
 
-    // TODO can i make this async? also should i?
-    //      actually if something becomes async it should probably be the chunk/world rebuild funcs,
-    //       probably better to keep the individual vchunk meshing synchronous
     private buildMesh(stuff: MyStuff) {
-        // TODO super unoptimized mesh building for now, just to make sure this all works
-        // const perCube = /* quads per cube */ 6 /* tris per quad */ * 2 /* verts per tri */ * 3 /* data-s per vert */ * 3;
-        // const meshData = new Float32Array(/* length * width * height */ 16 * 16 * 16 /* data-s per cube */ * perCube);
         const meshVerts: number[] = [];
         const meshIndices: number[] = [];
         const meshUVs: number[] = [];

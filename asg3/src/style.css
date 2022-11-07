@@ -2,3 +2,25 @@
 #canvas {
     image-rendering: pixelated;
 }
+
+body {
+    background-color: #222;
+    color: #eee;
+    font-family: monospace;
+}
+
+a {
+    color: rgb(0, 119, 255);
+}
+
+details {
+    margin: 0.5em;
+}
+summary {
+    background-color: #444;
+    padding: .3em;
+}
+
+code {
+    background-color: #000;
+}

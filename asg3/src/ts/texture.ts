@@ -1,3 +1,4 @@
+import { debugToggles } from "./debug_toggles.js";
 import { assert, isPow2, setFind, setMap, warnRateLimited } from "./util.js";
 
 function loadImgFromPath(path: string): Promise<HTMLImageElement> {
@@ -31,12 +32,6 @@ export type TextureAtlasInfo = {
     readonly width: number;
     readonly height: number;
 };
-
-// TODO factor these out to some settings thing, preferably one that can be changed at runtime
-/** debug switch, draw internal state of atlasing algorithm to atlas image */
-const drawFreeRects = false;
-/** debug switch, colorize mipmap levels */
-const colorizeMipLevels = false;
 
 type AtlasBuilderInputItem = readonly [name: string, img: HTMLImageElement];
 
@@ -183,7 +178,7 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number, margin
         // ctx.imageSmoothingEnabled = false;
         mipCanvases.push([mipLevel, canvas, ctx] as const);
         // debug - fill with magenta
-        ctx.fillStyle = '#00F';
+        ctx.fillStyle = debugToggles.has('draw_atlas_packing_internal_state') ? '#fff' : '#00F';
         ctx.fillRect(0, 0, mipSize, mipSize);
     }
     
@@ -239,7 +234,7 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number, margin
         const fullSizeAtlasCtx = mipCanvases.find(([level]) => level === 0)?.[2];
         assert(fullSizeAtlasCtx !== undefined);
             // debug - draw the remaining free rects
-            if(drawFreeRects) {
+            if(debugToggles.has('draw_atlas_packing_internal_state')) {
                 const abc: [DOMRectReadOnly, string][] = [];
                 for(const r of atlasPack.freeRects) {
                     const rgb = `${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255}`;
@@ -257,7 +252,7 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number, margin
             }
     }
 
-    if(colorizeMipLevels) {
+    if(debugToggles.has('colorize_mipmaps')) {
         for(const [level, canvas, ctx] of mipCanvases) {
             ctx.fillStyle = `hsla(${level / (mipCanvases.length - 1) * 300}, 100%, 50%, 0.5)`;
             ctx.fillRect(0, 0, canvas.width, canvas.height);

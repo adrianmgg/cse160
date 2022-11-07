@@ -4,6 +4,7 @@ import { Color, Mesh, Vec } from './3d.js';
 import type { MyGlStuff, MyStuff } from "./main.js";
 import type { TextureAtlasInfo } from "./texture.js";
 import { PerlinNoise } from "./noise.js";
+import { debugToggles } from "./debug_toggles.js";
 
 const MC_WORLD_IDB_VERSION = 1 as const;
 
@@ -552,16 +553,25 @@ export class VChunk {
                         for(const [vx, vy, vz] of faceVerts) {
                             meshVerts.push(x+vx, y+vy, z+vz);
                         }
-                        for(const tri of VChunk.CUBE_FACE_INDICES[face]) {
-                            for(const idx of tri) meshIndices.push(elemIdx + idx);
+                        if(debugToggles.has('render_wireframe')) {
+                            meshIndices.push(
+                                elemIdx + 0, elemIdx + 1,
+                                elemIdx + 1, elemIdx + 2,
+                                elemIdx + 2, elemIdx + 3,
+                                elemIdx + 3, elemIdx + 0,
+                            );
+                        } else {
+                            for(const tri of VChunk.CUBE_FACE_INDICES[face]) {
+                                for(const idx of tri) meshIndices.push(elemIdx + idx);
+                            }
                         }
                         elemIdx += faceVerts.length;
                         const tex = getTextureFor(block, face, stuff.atlas);
                         meshUVs.push(
-                            tex.left , tex.top   , 
-                            tex.right, tex.top   , 
-                            tex.right, tex.bottom, 
-                            tex.left , tex.bottom, 
+                            tex.left , tex.top   ,
+                            tex.right, tex.top   ,
+                            tex.right, tex.bottom,
+                            tex.left , tex.bottom,
                         );
                     }
                 }
@@ -637,8 +647,11 @@ export class VChunk {
             if(u_BlockPos !== null) gl.uniform3f(u_BlockPos, chunkX, chunkY, chunkZ);
 
             // render
-            gl.drawElements(gl.TRIANGLES, this.numIndices, gl.UNSIGNED_SHORT, 0);
-            // gl.drawElements(gl.LINES, this.numIndices, gl.UNSIGNED_SHORT, 0);
+            if(debugToggles.has('render_wireframe')) {
+                gl.drawElements(gl.LINES, this.numIndices, gl.UNSIGNED_SHORT, 0);
+            } else {
+                gl.drawElements(gl.TRIANGLES, this.numIndices, gl.UNSIGNED_SHORT, 0);
+            }
         } else {
             warnRateLimited(`skipping render of vchunk ${chunkX},${chunkY},${chunkZ} as it has no mesh`);
         }

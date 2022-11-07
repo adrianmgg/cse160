@@ -1,4 +1,5 @@
 import { Camera, Mesh, Vec, Mat4x4 } from './3d.js';
+import { debugToggles, setupDebugToggles } from './debug_toggles.js';
 import { getProgramVarLocations, loadProgramFromFiles, ProgramVarLocations } from './gl.js';
 import { Block, MCWorld } from './mc.js';
 import { atlasImages, loadImages, TextureAtlasInfo } from './texture.js';
@@ -38,6 +39,7 @@ type InputInfo = {
 };
 
 async function main() {
+    setupDebugToggles();
     const canvas = document.getElementById('canvas');
     assert(canvas !== null);
     assert(canvas instanceof HTMLCanvasElement);
@@ -93,12 +95,14 @@ async function main() {
         inputInfo.releasedMouseButtons.add(ev.button);
     }
     function keydownDuringPointerLock(ev: KeyboardEvent) {
+        ev.preventDefault();
         if(ev.repeat) return;
         inputInfo.heldKeys.add(ev.code);
         inputInfo.pressedKeys.add(ev.code);
         inputInfo.releasedKeys.delete(ev.code);
     }
     function keyupDuringPointerLock(ev: KeyboardEvent) {
+        ev.preventDefault();
         inputInfo.heldKeys.delete(ev.code);
         inputInfo.pressedKeys.delete(ev.code);
         inputInfo.releasedKeys.add(ev.code);
@@ -240,10 +244,11 @@ async function serverTick(stuff: MyStuff) {
 }
 
 let lastRenderTick = 0; // maybe shouldn't be global if we're trying to not be
-let movementSpeed = 1.0;
 function renderTick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     let delta = now - lastRenderTick;
     clearCanvas(stuff.glStuff);
+
+    let movementSpeed = debugToggles.has('fast_movement') ? 4.0 : 1.0;
 
     const { world, camera, input: { heldKeys, pressedMouseButtons } } = stuff;
     // console.log(heldKeys);

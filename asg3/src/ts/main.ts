@@ -5,10 +5,6 @@ import { Block, MCWorld } from './mc.js';
 import { atlasImages, loadImages, TextureAtlasInfo } from './texture.js';
 import { assert } from "./util.js";
 
-// TODO factor this into some debug settings thing eventually probably
-/** debug option, disable use of webgl 2 */
-const forceWebgl1 = false;
-
 // making a type to hold all these so i can just pass them around instead of having global variables
 // for everything
 export type MyGlStuff = {
@@ -136,7 +132,7 @@ async function main() {
 }
 
 function initWebGL(canvas: HTMLCanvasElement): WebGL1Or2 {
-    if(!forceWebgl1) {
+    if(!debugToggles.has('force_webgl_1_only')) {
         const gl2 = canvas.getContext('webgl2', {antialias: false});
         if(gl2 !== null) {
             return {gl: gl2, hasWebgl2: true};
@@ -164,14 +160,15 @@ type MyProgramInfo = {
 function setupGLExtensions({gl}: WebGL1Or2): Set<string> {
     const supportedExtensions = gl.getSupportedExtensions() ?? [];
     const usedExtensions = new Set<string>();
-    // console.log(supportedExtensions);
-    for(const desiredExtension of [
-        // list extensions here
-        // TODO OES_standard_derivatives & EXT_shader_texture_lod are conditional on lack of webgl2 (not required even in that case tho)
-        'OES_standard_derivatives', 'EXT_shader_texture_lod',
-    ]) {
-        if(supportedExtensions.includes(desiredExtension)) {
-            usedExtensions.add(desiredExtension);
+    if(!debugToggles.has('force_no_gl_extensions')) {
+        for(const desiredExtension of [
+            // list extensions here
+            // TODO OES_standard_derivatives & EXT_shader_texture_lod are conditional on lack of webgl2 (not required even in that case tho)
+            'OES_standard_derivatives', 'EXT_shader_texture_lod',
+        ]) {
+            if(supportedExtensions.includes(desiredExtension)) {
+                usedExtensions.add(desiredExtension);
+            }
         }
     }
     for(const ext of usedExtensions) {

@@ -1,6 +1,6 @@
 import { assert } from "./util.js";
 
-export const DEBUG_TOGGLES = ['colorize_mipmaps', 'render_wireframe', 'fast_movement', 'draw_atlas_packing_internal_state'] as const;
+export const DEBUG_TOGGLES = ['colorize_mipmaps', 'render_wireframe', 'fast_movement', 'draw_atlas_packing_internal_state', 'force_webgl_1_only', 'force_no_gl_extensions'] as const;
 export type DebugToggle = (typeof DEBUG_TOGGLES)[number];
 
 export const debugToggles: Set<DebugToggle> = new Set();

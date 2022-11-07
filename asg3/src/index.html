@@ -36,7 +36,7 @@
                         <li>as you can see below, some of the higher mipmap levels (the ones outlined in red) are too small and wouldn't look right when rendered. I use two different methods for solving this <ul>
                             <li>if webgl 2 is supported by the browser I use that and set the maximum LOD for the texture (not supported on webgl 1)</li>
                             <li>if webgl 2 isn't supported but certain opengl extensions are available, I use some shader code to manually calculate the lod, clamp it, then sample the texture with that lod</li>
-                            <li>if neither are available then it'll just look bad far away, but most browsers should support at least one</li>
+                            <li>if neither are available then it'll just look bad far away, but most browsers should support at least one (you can see what this looks like by enabling the debug flags <code>force_no_gl_extensions</code> and <code>force_webgl_1_only</code>)</li>
                         </ul></li>
                         <li>currently there's quite a bit of padding added to each texture in the atlas, that could probably be decreased a lot or avoided entirely but I haven't gotten around to that yet</li>
                     </ul></li>

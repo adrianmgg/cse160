@@ -178,12 +178,16 @@ function setupGLExtensions({gl}: WebGL1Or2): Set<string> {
 }
 
 async function setupShaders({gl, hasWebgl2}: WebGL1Or2, extensions: Set<string>): Promise<MyProgramInfo> {
-    const hasExtensionDefines = [];
+    const hasExtensionDefines: string[] = [];
     if(hasWebgl2) hasExtensionDefines.push('HAS_WEBGL2');
     for(const extension of extensions) {
         hasExtensionDefines.push(`HAS_EXT_${extension}`);
     }
     const glslVersion = (hasWebgl2) ? '300 es' : '100';
+    const debugToggleDefines: string[] = [];
+    for(const debugToggle of debugToggles) {
+        debugToggleDefines.push(`DEBUGTOGGLE_${debugToggle.toUpperCase()}`);
+    }
     const program = await loadProgramFromFiles(gl, 'shaders/vertex.vert', 'shaders/fragment.frag', glslVersion, [
         ...hasExtensionDefines,
     ]);

@@ -147,6 +147,10 @@ async function setupShaders({ gl, hasWebgl2 }, extensions) {
         hasExtensionDefines.push(`HAS_EXT_${extension}`);
     }
     const glslVersion = (hasWebgl2) ? '300 es' : '100';
+    const debugToggleDefines = [];
+    for (const debugToggle of debugToggles) {
+        debugToggleDefines.push(`DEBUGTOGGLE_${debugToggle.toUpperCase()}`);
+    }
     const program = await loadProgramFromFiles(gl, 'shaders/vertex.vert', 'shaders/fragment.frag', glslVersion, [
         ...hasExtensionDefines,
     ]);

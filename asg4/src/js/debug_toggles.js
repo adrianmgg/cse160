@@ -1,5 +1,5 @@
 import { assert } from "./util.js";
-export const DEBUG_TOGGLES = ['colorize_mipmaps', 'render_wireframe', 'fast_movement', 'draw_atlas_packing_internal_state', 'force_webgl_1_only', 'force_no_gl_extensions'];
+export const DEBUG_TOGGLES = ['show_normals', 'colorize_mipmaps', 'render_wireframe', 'fast_movement', 'draw_atlas_packing_internal_state', 'force_webgl_1_only', 'force_no_gl_extensions'];
 export const debugToggles = new Set();
 export function setupDebugToggles() {
     debugToggles.clear();

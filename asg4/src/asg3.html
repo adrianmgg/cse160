@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Assignment 3</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="js/main.js" type="module"></script>
+</head>
+
+<body>
+    <canvas id="canvas" width="400" height="400"></canvas>
+    <details open><summary>debug toggles</summary>
+        note: changing most of these WILL reload the page
+        <div id="debug_toggles_container"></div>
+        <!-- TODO do these properly in the code rather than these temp onX inline events -->
+        <br><label>render distance <input type="number" min="0" step="1" value="2" onchange="mcStuff.world.renderDistance = this.value" oninput="mcStuff.world.renderDistance = this.value"></label>
+        <br><button onclick="indexedDB.deleteDatabase('new world')">delete saved world data (requires manual reload)</button>
+    </details>
+    <div id="ui_container"></div>
+    <div>
+        <details open>
+            <summary>about</summary>
+            <details open><summary>controls</summary>
+                <ul>
+                    <li>click the canvas to start controlling the game. w/a/s/d = move, q/e or mouse = turn, left click = break block, shift/space = fly up/down</li>
+                    <li>you can turn on the <code>fast_movement</code> debug toggle to navigate the world faster</li>
+                </ul>
+            </details>
+            <details open><summary>technical details</summary>
+                <ul>
+                    <li>world is split into 16x16x256 chunks, chunks split into 16x16x16 vertical chunks</li>
+                    <li>each vertical chunk has a mesh generated for it, containing just the block faces which aren't occluded by other blocks in that v-chunk. meshes are re-generated before rendering if any blocks have been changed</li>
+                    <li>world is saved to & loaded from disk using IndexedDB api <ul>
+                        <li>(currently only happens when chunks are unloaded from leaving render distance, so you'll need to walk away until the chunk exits render distance, but after that you can reload the window and any changes made will still be there)</li>
+                    </ul></li>
+                    <li>texture atlases are generated at runtime, and mipmap generation is done manually to avoid any bleed between the aliased textures<ul>
+                        <li>as you can see below, some of the higher mipmap levels (the ones outlined in red) are too small and wouldn't look right when rendered. I use two different methods for solving this <ul>
+                            <li>if webgl 2 is supported by the browser I use that and set the maximum LOD for the texture (not supported on webgl 1)</li>
+                            <li>if webgl 2 isn't supported but certain opengl extensions are available, I use some shader code to manually calculate the lod, clamp it, then sample the texture with that lod</li>
+                            <li>if neither are available then it'll just look bad far away, but most browsers should support at least one (you can see what this looks like by enabling the debug flags <code>force_no_gl_extensions</code> and <code>force_webgl_1_only</code>)</li>
+                        </ul></li>
+                        <li>currently there's quite a bit of padding added to each texture in the atlas, that could probably be decreased a lot or avoided entirely but I haven't gotten around to that yet</li>
+                    </ul></li>
+                    <li>the code was written in typescript, then transpiled to javascript. for the typescript sources, look at the sources in your browser's dev tools (assuming source mapping is working), or see the ts directory <a href="ts">here</a></li>
+                </ul>
+            </details>
+            <details open><summary>known bugs</summary>
+                <ul>
+                    <li>looking directly up results in nothing being rendered</li>
+                    <li>camera direction sometimes jumps around when exiting pointer capture</li>
+                </ul>
+            </details>
+            <details open><summary>missing features/stuff I wanted to add but didn't get around to</summary>
+                <ul>
+                    <li>ability to place blocks</li>
+                    <li>collision/physics</li>
+                    <li>player position saving (currently you're always reset to a hardcoded location</li>
+                </ul>
+            </details>
+            <details open><summary>credits</summary>
+                <ul>
+                    <li>algorithm used for packing textures into the texture atlas is the MAXRECTS algorithm from "A Thousand Ways to Pack the Bin - A Practical Approach to Two-Dimensional Rectangle Bin Packing" by Jukka Jylänki</li>
+                    <!-- TODO -->
+                    <li>there's some others but i'm writing this at the last minute so I don't have time to finish this section</li>
+                </ul>
+            </details>
+        </details>
+    </div>
+</body>
+
+</html>

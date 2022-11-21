@@ -459,6 +459,7 @@ export class VChunk {
     private meshVerts: WebGLBuffer | null;
     private meshIndices: WebGLBuffer | null;
     private meshUVs: WebGLBuffer | null;
+    private meshNormals: WebGLBuffer | null;
     private meshDirty: boolean;
     private numIndices: number = 0;
 
@@ -467,6 +468,7 @@ export class VChunk {
         this.meshVerts = null;
         this.meshIndices = null;
         this.meshUVs = null;
+        this.meshNormals = null;
         this.meshDirty = true;
     }
 
@@ -540,6 +542,7 @@ export class VChunk {
         const meshVerts: number[] = [];
         const meshIndices: number[] = [];
         const meshUVs: number[] = [];
+        const meshNormals: number[] = [];
         let elemIdx = 0;
         for(let x = 0; x < 16; x++) {
             for(let y = 0; y < 16; y++) {
@@ -573,6 +576,7 @@ export class VChunk {
                             tex.right, tex.bottom,
                             tex.left , tex.bottom,
                         );
+                        meshNormals.push(0, 0, 0, 1, 1, 1, 1, 0); // TODO
                     }
                 }
             }
@@ -602,6 +606,11 @@ export class VChunk {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.meshUVs);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshUVs), gl.STATIC_DRAW);
 
+        this.meshNormals = gl.createBuffer();
+        assert(this.meshNormals !== null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.meshNormals);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshNormals), gl.STATIC_DRAW);
+
         this.meshDirty = false;
     }
     
@@ -619,6 +628,10 @@ export class VChunk {
             gl.deleteBuffer(this.meshUVs);
             this.meshUVs = null;
         }
+        if(this.meshNormals !== null) {
+            gl.deleteBuffer(this.meshNormals);
+            this.meshNormals = null;
+        }
         // this.meshDirty = true;
     }
 
@@ -627,8 +640,8 @@ export class VChunk {
     }
 
     render(stuff: MyGlStuff, chunkX: number, chunkY: number, chunkZ: number): void {
-        const { gl, program: { uniform: { u_BlockPos }, attrib: { a_Position, a_UV } } } = stuff;
-        if(this.meshVerts !== null && this.meshIndices !== null && this.meshUVs !== null) {
+        const { gl, program: { uniform: { u_BlockPos }, attrib: { a_Position, a_UV, a_Normal } } } = stuff;
+        if(this.meshVerts !== null && this.meshIndices !== null && this.meshUVs !== null && this.meshNormals !== null) {
             if(a_Position !== null) {
                 gl.bindBuffer(gl.ARRAY_BUFFER, this.meshVerts);
                 gl.enableVertexAttribArray(a_Position);
@@ -638,6 +651,11 @@ export class VChunk {
                 gl.bindBuffer(gl.ARRAY_BUFFER, this.meshUVs);
                 gl.enableVertexAttribArray(a_UV);
                 gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
+            }
+            if(a_Normal !== null) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.meshUVs);
+                gl.enableVertexAttribArray(a_Normal);
+                gl.vertexAttribPointer(a_Normal, 2, gl.FLOAT, false, 0, 0);
             }
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices);
 

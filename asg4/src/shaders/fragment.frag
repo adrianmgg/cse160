@@ -36,6 +36,7 @@ uniform sampler2D u_TextureAtlas;
 uniform vec4 u_Color;
 INVAR vec3 v_TempDebugColor;
 INVAR vec2 v_UV;
+INVAR vec2 v_Normal;
 DECLARE_OUTCOLOR
 
 vec4 sampleTextureAtlas(vec2 textureCoord);
@@ -82,5 +83,9 @@ vec4 sampleTextureAtlas(vec2 textureCoord) {
 
 
 void main() {
-    OUTCOLOR = mix(sampleTextureAtlas(v_UV), u_Color, u_Color.a);
+    #if defined(DEBUGTOGGLE_SHOW_NORMALS)
+        OUTCOLOR = vec4(v_Normal, 0.0, 1.0);
+    #else
+        OUTCOLOR = mix(sampleTextureAtlas(v_UV), u_Color, u_Color.a);
+    #endif
 }

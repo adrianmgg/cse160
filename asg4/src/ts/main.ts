@@ -150,7 +150,7 @@ function setupWebGL({gl}: WebGL1Or2) {
     // gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 }
 
-const SHADER_ATTRIBUTE_NAMES = ['a_Position', 'a_UV'] as const;
+const SHADER_ATTRIBUTE_NAMES = ['a_Position', 'a_UV', 'a_Normal'] as const;
 const SHADER_UNIFORM_NAMES = ['u_CameraMat', 'u_BlockPos', 'u_TextureAtlas', 'u_MaxTextureAtlasLOD', 'u_TextureAtlasDimensions', 'u_Color'] as const;
 
 type MyProgramInfo = {
@@ -190,6 +190,7 @@ async function setupShaders({gl, hasWebgl2}: WebGL1Or2, extensions: Set<string>)
     }
     const program = await loadProgramFromFiles(gl, 'shaders/vertex.vert', 'shaders/fragment.frag', glslVersion, [
         ...hasExtensionDefines,
+        ...debugToggleDefines,
     ]);
     // TODO not the right place for this todo but whatever - should i be `deleteShader`ing after i'm
     // done making the program?

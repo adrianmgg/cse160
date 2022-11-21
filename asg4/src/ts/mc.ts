@@ -1,5 +1,5 @@
 import { idbOpen, idbRequest2Promise } from "./db.js";
-import { assert, debugAssert, Dict2D, NTupleOf, warnRateLimited } from "./util.js";
+import { assert, debugAssert, Dict2D, mapRecord, NTupleOf, warnRateLimited } from "./util.js";
 import { Color, Mesh, Vec } from './3d.js';
 import type { MyGlStuff, MyStuff } from "./main.js";
 import type { TextureAtlasInfo } from "./texture.js";
@@ -537,6 +537,24 @@ export class VChunk {
         [CubeFace.DOWN]:  [[0,2,1], [0,3,2]],
         [CubeFace.BACK]:  [[0,1,2], [0,2,3]],
     } as const;
+    // private static readonly CUBE_FACE_NORMALS: Record<CubeFace, Readonly<NTupleOf<number, 8>>> = {
+    //     [CubeFace.FRONT]: [0, 0, 0, 0, 0, 0, 0, 0],
+    //     [CubeFace.RIGHT]: [0, 0, 0, 0, 0, 0, 0, 0],
+    //     [CubeFace.UP]:    [0, 0, 0, 0, 0, 0, 0, 0],
+    //     [CubeFace.LEFT]:  [0, 0, 0, 0, 0, 0, 0, 0],
+    //     [CubeFace.DOWN]:  [0, 0, 0, 0, 0, 0, 0, 0],
+    //     [CubeFace.BACK]:  [0, 0, 0, 0, 0, 0, 0, 0],
+    // } as const;
+    private static readonly CUBE_FACE_NORMALS: Record<CubeFace, Readonly<NTupleOf<NTupleOf<number, 3>, 4>>> = mapRecord({
+        [CubeFace.FRONT]: Vec.forwards() ,
+        [CubeFace.RIGHT]: Vec.right()    ,
+        [CubeFace.UP   ]: Vec.up()       ,
+        [CubeFace.LEFT ]: Vec.left()     ,
+        [CubeFace.DOWN ]: Vec.down()     ,
+        [CubeFace.BACK ]: Vec.backwards(),
+    } as const, (k, v) => {
+        return [v.xyz(), v.xyz(), v.xyz(), v.xyz()] as const;
+    });
 
     private buildMesh(stuff: MyStuff) {
         const meshVerts: number[] = [];
@@ -576,7 +594,9 @@ export class VChunk {
                             tex.right, tex.bottom,
                             tex.left , tex.bottom,
                         );
-                        meshNormals.push(0, 0, 0, 1, 1, 1, 1, 0); // TODO
+                        for(const norm of VChunk.CUBE_FACE_NORMALS[face]) {
+                            meshNormals.push(...norm);
+                        }
                     }
                 }
             }
@@ -653,9 +673,9 @@ export class VChunk {
                 gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
             }
             if(a_Normal !== null) {
-                gl.bindBuffer(gl.ARRAY_BUFFER, this.meshUVs);
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.meshNormals);
                 gl.enableVertexAttribArray(a_Normal);
-                gl.vertexAttribPointer(a_Normal, 2, gl.FLOAT, false, 0, 0);
+                gl.vertexAttribPointer(a_Normal, 3, gl.FLOAT, false, 0, 0);
             }
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices);
 

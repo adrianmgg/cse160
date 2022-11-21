@@ -11,10 +11,10 @@ uniform mat4 u_CameraMat;
 uniform vec3 u_BlockPos;
 INVAR vec3 a_Position;
 INVAR vec2 a_UV;
-INVAR vec2 a_Normal;
+INVAR vec3 a_Normal;
 OUTVAR vec2 v_UV;
 OUTVAR vec3 v_TempDebugColor;
-OUTVAR vec2 v_Normal; // TODO pack in with uv as vec4?
+OUTVAR vec3 v_Normal;
 
 void main(void) {
     vec3 worldPos = a_Position + u_BlockPos;

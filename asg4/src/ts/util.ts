@@ -134,3 +134,10 @@ export function lerp(a: number, b: number, t: number): number {
     // return a * t + b * (1 - t);
     return (1-t)*a + t*b;
 }
+
+export function mapRecord<TK extends string | number | symbol, TV, TR>(record: Record<TK, TV>, func: (k: TK, v: TV) => TR): Record<TK, TR> {
+    return Object.fromEntries(
+        Object.entries(record)
+            .map(([k, v]) => [k as any as TK, func(k as any as TK, v as any as TV)])
+    ) as Record<TK, TR>;
+}

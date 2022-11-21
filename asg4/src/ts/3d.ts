@@ -681,7 +681,7 @@ export class Mesh {
     get needsCompile(): boolean {
         return this.dirty || !this.isCompiled;
     }
-    mode: GLenum = 0; // TODO proper default value or make it null
+    mode: GLenum | null = null; // TODO proper default value or make it null
 
     constructor() {
         this.verts = [];
@@ -702,8 +702,8 @@ export class Mesh {
         if(this.indicesBuf !== null) gl.deleteBuffer(this.indicesBuf);
         this.indicesBuf = gl.createBuffer();
         assert(this.indicesBuf !== null);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.indicesBuf);
-        gl.bufferData(gl.ARRAY_BUFFER, new Uint16Array(this.indices), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indicesBuf);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.indices), gl.STATIC_DRAW);
         // compile uvs
         if(this.uvsBuf !== null) gl.deleteBuffer(this.uvsBuf);
         this.uvsBuf = gl.createBuffer();
@@ -721,27 +721,50 @@ export class Mesh {
     }
 
     render(glStuff: MyGlStuff) {
-        if(this.vertsBuf !== null && this.uvsBuf !== null && this.indicesBuf !== null && this.normalsBuf !== null) {
-            const { gl, program: { attrib: { a_Normal, a_Position, a_UV } } } = glStuff;
-            if(a_Position !== null) {
-                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertsBuf);
-                gl.enableVertexAttribArray(a_Position);
-                gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
-            }
-            if(a_UV !== null) {
-                gl.bindBuffer(gl.ARRAY_BUFFER, this.uvsBuf);
-                gl.enableVertexAttribArray(a_UV);
-                gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
-            }
-            if(a_Normal !== null) {
-                gl.bindBuffer(gl.ARRAY_BUFFER, this.normalsBuf);
-                gl.enableVertexAttribArray(a_Normal);
-                gl.vertexAttribPointer(a_Normal, 3, gl.FLOAT, false, 0, 0);
-            }
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indicesBuf);
-            gl.drawElements(this.mode, this.indices.length, gl.UNSIGNED_SHORT, 0);
-        } else {
+        if(this.vertsBuf === null || this.uvsBuf === null || this.indicesBuf === null || this.normalsBuf === null) {
             warnRateLimited('tried to render mesh before it was compiled');
+            return;
+        }
+        if(this.mode === null) {
+            warnRateLimited('tried to render mesh with no mode set');
+            return;
+        }
+        const { gl, program: { attrib: { a_Normal, a_Position, a_UV } } } = glStuff;
+        if(a_Position !== null) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.vertsBuf);
+            gl.enableVertexAttribArray(a_Position);
+            gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+        }
+        if(a_UV !== null) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.uvsBuf);
+            gl.enableVertexAttribArray(a_UV);
+            gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
+        }
+        if(a_Normal !== null) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.normalsBuf);
+            gl.enableVertexAttribArray(a_Normal);
+            gl.vertexAttribPointer(a_Normal, 3, gl.FLOAT, false, 0, 0);
+        }
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indicesBuf);
+        gl.drawElements(this.mode, this.indices.length, gl.UNSIGNED_SHORT, 0);
+    }
+
+    freeCompiled({ gl }: MyGlStuff) {
+        if(this.vertsBuf !== null) {
+            gl.deleteBuffer(this.vertsBuf);
+            this.vertsBuf = null;
+        }
+        if(this.uvsBuf !== null) {
+            gl.deleteBuffer(this.uvsBuf);
+            this.uvsBuf = null;
+        }
+        if(this.indicesBuf !== null) {
+            gl.deleteBuffer(this.indicesBuf);
+            this.indicesBuf = null;
+        }
+        if(this.normalsBuf !== null) {
+            gl.deleteBuffer(this.normalsBuf);
+            this.normalsBuf = null;
         }
     }
 

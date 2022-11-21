@@ -451,25 +451,14 @@ export class Chunk {
 
 export class VChunk {
     private readonly blockData: Uint8Array;
-    /**
-     * vertices of this vchunk's mesh. will be null when there is no mesh data, but a non-null value
-     * does NOT imply that the mesh doesn't need recalculating. for that, see {@link meshDirty}
-     */
-    // TODO should move all this stuff into some kinda mesh buffer manager
-    private meshVerts: WebGLBuffer | null;
-    private meshIndices: WebGLBuffer | null;
-    private meshUVs: WebGLBuffer | null;
-    private meshNormals: WebGLBuffer | null;
+    private mesh: Mesh;
+    /* whether the mesh is out of sync with the current block data */
     private meshDirty: boolean;
-    private numIndices: number = 0;
     private mat: Mat4x4;
 
     constructor(blockData: Uint8Array) {
+        this.mesh = new Mesh();
         this.blockData = blockData;
-        this.meshVerts = null;
-        this.meshIndices = null;
-        this.meshUVs = null;
-        this.meshNormals = null;
         this.meshDirty = true;
         this.mat = Mat4x4.identity();
     }
@@ -559,10 +548,10 @@ export class VChunk {
     });
 
     private buildMesh(stuff: MyStuff) {
-        const meshVerts: number[] = [];
-        const meshIndices: number[] = [];
-        const meshUVs: number[] = [];
-        const meshNormals: number[] = [];
+        this.mesh.verts = [];
+        this.mesh.indices = [];
+        this.mesh.uvs = [];
+        this.mesh.normals = [];
         let elemIdx = 0;
         for(let x = 0; x < 16; x++) {
             for(let y = 0; y < 16; y++) {
@@ -574,10 +563,10 @@ export class VChunk {
                         if(this.hasBlockAt(x+ox, y+oy, z+oz)) continue;
                         const faceVerts = VChunk.CUBE_FACE_VERTS[face];
                         for(const [vx, vy, vz] of faceVerts) {
-                            meshVerts.push(x+vx, y+vy, z+vz);
+                            this.mesh.verts.push(x+vx, y+vy, z+vz);
                         }
                         if(debugToggles.has('render_wireframe')) {
-                            meshIndices.push(
+                            this.mesh.indices.push(
                                 elemIdx + 0, elemIdx + 1,
                                 elemIdx + 1, elemIdx + 2,
                                 elemIdx + 2, elemIdx + 3,
@@ -585,122 +574,89 @@ export class VChunk {
                             );
                         } else {
                             for(const tri of VChunk.CUBE_FACE_INDICES[face]) {
-                                for(const idx of tri) meshIndices.push(elemIdx + idx);
+                                for(const idx of tri) this.mesh.indices.push(elemIdx + idx);
                             }
                         }
                         elemIdx += faceVerts.length;
                         const tex = getTextureFor(block, face, stuff.atlas);
-                        meshUVs.push(
+                        this.mesh.uvs.push(
                             tex.left , tex.top   ,
                             tex.right, tex.top   ,
                             tex.right, tex.bottom,
                             tex.left , tex.bottom,
                         );
                         for(const norm of VChunk.CUBE_FACE_NORMALS[face]) {
-                            meshNormals.push(...norm);
+                            this.mesh.normals.push(...norm);
                         }
                     }
                 }
             }
         }
-
-        this.deleteMesh(stuff);
-        const { glStuff: { gl, program: { attrib: { a_Position } } } } = stuff;
-
-        this.meshVerts = gl.createBuffer();
-        assert(this.meshVerts !== null);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.meshVerts);
-        // TODO can this be STATIC_DRAW?
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshVerts), gl.STATIC_DRAW);
-        if(a_Position !== null) {
-            gl.enableVertexAttribArray(a_Position);
-            gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+        if(debugToggles.has('render_wireframe')) {
+            this.mesh.mode = stuff.glStuff.gl.LINES;
+        } else {
+            this.mesh.mode = stuff.glStuff.gl.TRIANGLES;
         }
-
-        this.meshIndices = gl.createBuffer();
-        assert(this.meshIndices !== null);
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(meshIndices), gl.STATIC_DRAW);
-        this.numIndices = meshIndices.length;
-
-        this.meshUVs = gl.createBuffer();
-        assert(this.meshUVs !== null);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.meshUVs);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshUVs), gl.STATIC_DRAW);
-
-        this.meshNormals = gl.createBuffer();
-        assert(this.meshNormals !== null);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.meshNormals);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(meshNormals), gl.STATIC_DRAW);
-
+        this.mesh.compile(stuff.glStuff);
         this.meshDirty = false;
     }
     
-    private deleteMesh(stuff: MyStuff) {
-        const { glStuff: { gl } } = stuff;
-        if(this.meshVerts !== null) {
-            gl.deleteBuffer(this.meshVerts);
-            this.meshVerts = null;
-        }
-        if(this.meshIndices !== null) {
-            gl.deleteBuffer(this.meshIndices);
-            this.meshIndices = null;
-        }
-        if(this.meshUVs !== null) {
-            gl.deleteBuffer(this.meshUVs);
-            this.meshUVs = null;
-        }
-        if(this.meshNormals !== null) {
-            gl.deleteBuffer(this.meshNormals);
-            this.meshNormals = null;
-        }
-        // this.meshDirty = true;
-    }
-
     cleanup(stuff: MyStuff) {
-        this.deleteMesh(stuff);
+        this.mesh.freeCompiled(stuff.glStuff);
     }
 
     render(stuff: MyGlStuff, chunkX: number, chunkY: number, chunkZ: number): void {
         const { gl, program: { uniform: { u_ModelMat }, attrib: { a_Position, a_UV, a_Normal } } } = stuff;
-        if(this.meshVerts !== null && this.meshIndices !== null && this.meshUVs !== null && this.meshNormals !== null) {
-            if(a_Position !== null) {
-                gl.bindBuffer(gl.ARRAY_BUFFER, this.meshVerts);
-                gl.enableVertexAttribArray(a_Position);
-                gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
-            }
-            if(a_UV !== null) {
-                gl.bindBuffer(gl.ARRAY_BUFFER, this.meshUVs);
-                gl.enableVertexAttribArray(a_UV);
-                gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
-            }
-            if(a_Normal !== null) {
-                gl.bindBuffer(gl.ARRAY_BUFFER, this.meshNormals);
-                gl.enableVertexAttribArray(a_Normal);
-                gl.vertexAttribPointer(a_Normal, 3, gl.FLOAT, false, 0, 0);
-            }
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices);
-
-            // TODO probably rename BlockPos to something more general like Offset or whatever
-            // TODO should probably add helpers for setting these rather than doing the null check every single time
-            // our overall pos
-            // if(u_BlockPos !== null) gl.uniform3f(u_BlockPos, chunkX, chunkY, chunkZ);
+        if(u_ModelMat !== null) {
             this.mat.setInPlace(
                 1, 0, 0, chunkX,
                 0, 1, 0, chunkY,
                 0, 0, 1, chunkZ,
                 0, 0, 0, 1,
             );
-            if(u_ModelMat !== null) gl.uniformMatrix4fv(u_ModelMat, false, this.mat.data);
-
-            // render
-            if(debugToggles.has('render_wireframe')) {
-                gl.drawElements(gl.LINES, this.numIndices, gl.UNSIGNED_SHORT, 0);
-            } else {
-                gl.drawElements(gl.TRIANGLES, this.numIndices, gl.UNSIGNED_SHORT, 0);
-            }
-        } else {
-            warnRateLimited(`skipping render of vchunk ${chunkX},${chunkY},${chunkZ} as it has no mesh`);
+            gl.uniformMatrix4fv(u_ModelMat, false, this.mat.data);
         }
+        this.mesh.render(stuff);
+
+    //     if(this.meshVerts !== null && this.meshIndices !== null && this.meshUVs !== null && this.meshNormals !== null) {
+    //         if(a_Position !== null) {
+    //             gl.bindBuffer(gl.ARRAY_BUFFER, this.meshVerts);
+    //             gl.enableVertexAttribArray(a_Position);
+    //             gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+    //         }
+    //         if(a_UV !== null) {
+    //             gl.bindBuffer(gl.ARRAY_BUFFER, this.meshUVs);
+    //             gl.enableVertexAttribArray(a_UV);
+    //             gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
+    //         }
+    //         if(a_Normal !== null) {
+    //             gl.bindBuffer(gl.ARRAY_BUFFER, this.meshNormals);
+    //             gl.enableVertexAttribArray(a_Normal);
+    //             gl.vertexAttribPointer(a_Normal, 3, gl.FLOAT, false, 0, 0);
+    //         }
+    //         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices);
+
+    //         // TODO probably rename BlockPos to something more general like Offset or whatever
+    //         // TODO should probably add helpers for setting these rather than doing the null check every single time
+    //         // our overall pos
+    //         // if(u_BlockPos !== null) gl.uniform3f(u_BlockPos, chunkX, chunkY, chunkZ);
+    //         this.mat.setInPlace(
+    //             1, 0, 0, chunkX,
+    //             0, 1, 0, chunkY,
+    //             0, 0, 1, chunkZ,
+    //             0, 0, 0, 1,
+    //         );
+    //         if(u_ModelMat !== null) gl.uniformMatrix4fv(u_ModelMat, false, this.mat.data);
+
+    //         // render
+    //         if(debugToggles.has('render_wireframe')) {
+    //             gl.drawElements(gl.LINES, this.numIndices, gl.UNSIGNED_SHORT, 0);
+    //         } else {
+    //             gl.drawElements(gl.TRIANGLES, this.numIndices, gl.UNSIGNED_SHORT, 0);
+    //         }
+    //     } else {
+    //         warnRateLimited(`skipping render of vchunk ${chunkX},${chunkY},${chunkZ} as it has no mesh`);
+    //     }
+    // }
     }
 }

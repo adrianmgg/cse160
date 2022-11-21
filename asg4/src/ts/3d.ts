@@ -674,7 +674,10 @@ export class Mesh {
     private indicesBuf: WebGLBuffer | null = null;
     private uvsBuf    : WebGLBuffer | null = null;
     private normalsBuf: WebGLBuffer | null = null;
+    private numIndices: number = 0;
+    private actualMode: GLenum | null = null;
     dirty: boolean;
+    private readonly autoWireframe: boolean;
     private get isCompiled(): boolean {
         return this.vertsBuf !== null && this.indicesBuf !== null && this.uvsBuf !== null && this.normalsBuf !== null;
     }
@@ -683,15 +686,31 @@ export class Mesh {
     }
     mode: GLenum | null = null; // TODO proper default value or make it null
 
-    constructor() {
+    constructor(autoWireframe: boolean = false) {
         this.verts = [];
         this.indices = [];
         this.uvs = [];
         this.normals = [];
         this.dirty = true;
+        this.autoWireframe = autoWireframe;
     }
 
     compile({ gl }: MyGlStuff) {
+        let indices: number[] = this.indices;
+        if(this.autoWireframe && debugToggles.has('render_wireframe')) {
+            assert(this.mode === gl.TRIANGLES, 'auto wireframe only supported for TRIANGLES');
+            indices = [];
+            for(let i = 0; i < this.indices.length; i += 3) {
+                indices.push(
+                    this.indices[i + 0]!, this.indices[i + 1]!,
+                    this.indices[i + 1]!, this.indices[i + 2]!,
+                    this.indices[i + 2]!, this.indices[i + 0]!,
+                );
+            }
+            this.actualMode = gl.LINES;
+        } else {
+            this.actualMode = this.mode;
+        }
         // compile verts
         if(this.vertsBuf !== null) gl.deleteBuffer(this.vertsBuf);
         this.vertsBuf = gl.createBuffer();
@@ -703,7 +722,7 @@ export class Mesh {
         this.indicesBuf = gl.createBuffer();
         assert(this.indicesBuf !== null);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indicesBuf);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.indices), gl.STATIC_DRAW);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
         // compile uvs
         if(this.uvsBuf !== null) gl.deleteBuffer(this.uvsBuf);
         this.uvsBuf = gl.createBuffer();
@@ -718,6 +737,8 @@ export class Mesh {
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.normals), gl.STATIC_DRAW);
         // clear dirty flag
         this.dirty = false;
+        //
+        this.numIndices = indices.length;
     }
 
     render(glStuff: MyGlStuff) {
@@ -725,7 +746,7 @@ export class Mesh {
             warnRateLimited('tried to render mesh before it was compiled');
             return;
         }
-        if(this.mode === null) {
+        if(this.actualMode === null) {
             warnRateLimited('tried to render mesh with no mode set');
             return;
         }
@@ -746,7 +767,7 @@ export class Mesh {
             gl.vertexAttribPointer(a_Normal, 3, gl.FLOAT, false, 0, 0);
         }
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indicesBuf);
-        gl.drawElements(this.mode, this.indices.length, gl.UNSIGNED_SHORT, 0);
+        gl.drawElements(this.actualMode, this.numIndices, gl.UNSIGNED_SHORT, 0);
     }
 
     freeCompiled({ gl }: MyGlStuff) {
@@ -766,6 +787,68 @@ export class Mesh {
             gl.deleteBuffer(this.normalsBuf);
             this.normalsBuf = null;
         }
+    }
+
+    static uvSphere(radius: number, longitudeSplits: number, latitudeSplits?: number): Mesh {
+        if(latitudeSplits === undefined) latitudeSplits = longitudeSplits * 2;
+        const ret = new Mesh(true); // enable auto wireframe
+        ret.mode = WebGLRenderingContext.TRIANGLES;
+        for(let long = 0; long < longitudeSplits; long++) {
+            const longt0 = ((long + 0) / longitudeSplits - 0.5) * Math.PI;
+            const longt1 = ((long + 1) / longitudeSplits - 0.5) * Math.PI;
+            for(let lat = 0; lat < latitudeSplits; lat++) {
+                const latt0 = (lat + 0) / latitudeSplits * Math.PI * 2;
+                const latt1 = (lat + 1) / latitudeSplits * Math.PI * 2;
+                const a = Vec.fromSpherical(radius, longt0, latt0);
+                const b = Vec.fromSpherical(radius, longt1, latt0);
+                const c = Vec.fromSpherical(radius, longt0, latt1);
+                const d = Vec.fromSpherical(radius, longt1, latt1);
+                const baseIdx = ret.verts.length / 3;
+                if(long === 0) {
+                    ret.verts.push(
+                        a.x, a.y, a.z,
+                        b.x, b.y, b.z,
+                        d.x, d.y, d.z,
+                    );
+                    ret.normals.push(
+                        ...a.normalized().xyz(),
+                        ...b.normalized().xyz(),
+                        ...d.normalized().xyz(),
+                    );
+                    ret.uvs.push(0, 0, 0, 0, 0, 0, 0, 0); // TODO
+                    ret.indices.push(baseIdx + 0, baseIdx + 2, baseIdx + 1);
+                } else if(long + 1 === longitudeSplits) {
+                    ret.verts.push(
+                        a.x, a.y, a.z,
+                        b.x, b.y, b.z,
+                        c.x, c.y, c.z,
+                    );
+                    ret.normals.push(
+                        ...a.normalized().xyz(),
+                        ...b.normalized().xyz(),
+                        ...c.normalized().xyz(),
+                    );
+                    ret.uvs.push(0, 0, 0, 0, 0, 0, 0, 0); // TODO
+                    ret.indices.push(baseIdx + 0, baseIdx + 2, baseIdx + 1);
+                } else {
+                    ret.verts.push(
+                        a.x, a.y, a.z,
+                        b.x, b.y, b.z,
+                        c.x, c.y, c.z,
+                        d.x, d.y, d.z,
+                    );
+                    ret.normals.push(
+                        ...a.normalized().xyz(),
+                        ...b.normalized().xyz(),
+                        ...c.normalized().xyz(),
+                        ...d.normalized().xyz(),
+                    );
+                    ret.uvs.push(0, 0, 0, 0, 0, 0, 0, 0); // TODO
+                    ret.indices.push(baseIdx + 3, baseIdx + 1, baseIdx + 0, baseIdx + 2, baseIdx + 3, baseIdx + 0);
+                }
+            }
+        }
+        return ret;
     }
 
     // static cylinder(divisions: number, center: Vec, radius: number, length: number, cap: boolean): Mesh {
@@ -833,7 +916,10 @@ export class Transform {
     scale: Vec = Vec.zero();
     // TODO cache/track when dirty (would require changes to vec i think)
     get mat(): Mat4x4 {
-        return Mat4x4.locRotScale(this.pos, this.rot, this.scale);
+        const m = Mat4x4.identity();
+        m.translateInPlace(this.pos.x, this.pos.y, this.pos.z);
+        return m;
+        // return Mat4x4.locRotScale(this.pos, this.rot, this.scale);
     }
 }
 
@@ -847,11 +933,11 @@ export class Model implements Renderable {
         this.color = color !== undefined ? color : new Color(0, 0, 0, 1);
     }
 
-    render(glStuff: MyGlStuff, mat: Mat4x4 | null) {
+    render(glStuff: MyGlStuff, mat?: Mat4x4) {
         const { gl, program: { uniform: { u_Color, u_ModelMat } } } = glStuff;
         // matrix stuff
         let curMat = this.transform.mat;
-        if(mat !== null) curMat = mat.matmul(curMat);
+        if(mat !== undefined) curMat = mat.matmul(curMat);
         gl.uniformMatrix4fv(u_ModelMat, false, curMat.data);
         // mesh
         if(this.mesh.needsCompile) this.mesh.compile(glStuff);

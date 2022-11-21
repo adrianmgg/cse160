@@ -1,6 +1,6 @@
 import { idbOpen, idbRequest2Promise } from "./db.js";
 import { assert, debugAssert, Dict2D, mapRecord, NTupleOf, warnRateLimited } from "./util.js";
-import { Color, Mat4x4, Mesh, Vec } from './3d.js';
+import { Color, Mat4x4, Mesh, Model, Vec } from './3d.js';
 import type { MyGlStuff, MyStuff } from "./main.js";
 import type { TextureAtlasInfo } from "./texture.js";
 import { PerlinNoise } from "./noise.js";
@@ -56,11 +56,13 @@ export class MCWorld {
     private readonly chunks: Dict2D<number, number, Chunk>;
     private readonly renderDistance: number = 2;
     private readonly noise: PerlinNoise;
+    readonly worldObjects: Model[]; // TODO clean this system up
 
     private constructor(db: IDBDatabase) {
         this.db = db;
         this.chunks = new Dict2D();
         this.noise = new PerlinNoise(5489);
+        this.worldObjects = [];
     }
 
     static async openWorld(worldName: string): Promise<MCWorld> {
@@ -153,10 +155,16 @@ export class MCWorld {
     render(stuff: MyGlStuff): void {
         const { gl, program: { attrib: { a_Position }, uniform: { u_ModelMat, u_Color } } } = stuff;
         if(u_Color !== null) gl.uniform4f(u_Color, 0, 0, 0, 0);
-        for(const [chunk] of this.chunks) {
-            chunk.render(stuff);
+        // render chunks
+        if(!debugToggles.has('no_draw_chunks')) {
+            for(const [chunk] of this.chunks) {
+                chunk.render(stuff);
+            }
         }
+
         // TODO scissor section in a corner & draw a minimap?
+
+        // render selected block outline
         // TODO should do this stuff elsewhere
         if(this.blockSelectBuf === null) {
             this.blockSelectBuf = gl.createBuffer();
@@ -172,6 +180,11 @@ export class MCWorld {
             if(u_ModelMat !== null) gl.uniformMatrix4fv(u_ModelMat, false, Mat4x4.translate(this.focusedBlockPos).data); // TODO avoid constucting vecs here
             if(u_Color !== null) gl.uniform4f(u_Color, 0, 1, 0, 1);
             gl.drawArrays(gl.LINES, 0, MCWorld.BLOCKSELECT_CUBE_POINTS.length / 3);
+        }
+
+        // render other models
+        for(const model of this.worldObjects) {
+            model.render(stuff);
         }
     }
 

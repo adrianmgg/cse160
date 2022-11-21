@@ -1,4 +1,4 @@
-import { Camera, Mesh, Vec, Mat4x4 } from './3d.js';
+import { Camera, Mesh, Vec, Mat4x4, Model } from './3d.js';
 import { debugToggles, setupDebugToggles } from './debug_toggles.js';
 import { getProgramVarLocations, loadProgramFromFiles, ProgramVarLocations } from './gl.js';
 import { Block, MCWorld } from './mc.js';
@@ -145,7 +145,7 @@ function initWebGL(canvas: HTMLCanvasElement): WebGL1Or2 {
 
 function setupWebGL({gl}: WebGL1Or2) {
     gl.enable(gl.DEPTH_TEST);
-    gl.enable(gl.CULL_FACE);
+    if(!debugToggles.has('no_backface_culling')) gl.enable(gl.CULL_FACE);
     // gl.enable(gl.BLEND);
     // gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 }
@@ -236,7 +236,14 @@ function setupTextures(atlas: TextureAtlasInfo, { gl, hasWebgl2, program: { unif
 }
 
 async function setupWorld(): Promise<MCWorld> {
-    return await MCWorld.openWorld('new world');
+    const world = await MCWorld.openWorld('new world');
+    // TODO should do this stuff elsewhere
+    const sphere = new Model(Mesh.uvSphere(1, 8));
+    sphere.transform.pos.x = 8;
+    sphere.transform.pos.y = 50;
+    sphere.transform.pos.z = -10;
+    world.worldObjects.push(sphere);
+    return world;
 }
 
 async function serverTick(stuff: MyStuff) {

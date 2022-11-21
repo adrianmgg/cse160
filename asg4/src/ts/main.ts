@@ -151,7 +151,7 @@ function setupWebGL({gl}: WebGL1Or2) {
 }
 
 const SHADER_ATTRIBUTE_NAMES = ['a_Position', 'a_UV', 'a_Normal'] as const;
-const SHADER_UNIFORM_NAMES = ['u_CameraMat', 'u_BlockPos', 'u_TextureAtlas', 'u_MaxTextureAtlasLOD', 'u_TextureAtlasDimensions', 'u_Color'] as const;
+const SHADER_UNIFORM_NAMES = ['u_ModelMat', 'u_CameraMat', 'u_TextureAtlas', 'u_MaxTextureAtlasLOD', 'u_TextureAtlasDimensions', 'u_Color'] as const;
 
 type MyProgramInfo = {
     program: WebGLProgram;

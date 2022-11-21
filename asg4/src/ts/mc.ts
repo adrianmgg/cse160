@@ -1,6 +1,6 @@
 import { idbOpen, idbRequest2Promise } from "./db.js";
 import { assert, debugAssert, Dict2D, mapRecord, NTupleOf, warnRateLimited } from "./util.js";
-import { Color, Mesh, Vec } from './3d.js';
+import { Color, Mat4x4, Mesh, Vec } from './3d.js';
 import type { MyGlStuff, MyStuff } from "./main.js";
 import type { TextureAtlasInfo } from "./texture.js";
 import { PerlinNoise } from "./noise.js";
@@ -151,7 +151,7 @@ export class MCWorld {
     ].map(n => (n - 0.5) * 1.01 + 0.5));
     private blockSelectBuf: WebGLBuffer | null = null; // TODO handle this better
     render(stuff: MyGlStuff): void {
-        const { gl, program: { attrib: { a_Position }, uniform: { u_BlockPos, u_Color } } } = stuff;
+        const { gl, program: { attrib: { a_Position }, uniform: { u_ModelMat, u_Color } } } = stuff;
         if(u_Color !== null) gl.uniform4f(u_Color, 0, 0, 0, 0);
         for(const [chunk] of this.chunks) {
             chunk.render(stuff);
@@ -169,7 +169,7 @@ export class MCWorld {
                 gl.enableVertexAttribArray(a_Position);
                 gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
             }
-            if(u_BlockPos !== null) gl.uniform3f(u_BlockPos, this.focusedBlockPos.x, this.focusedBlockPos.y, this.focusedBlockPos.z);
+            if(u_ModelMat !== null) gl.uniformMatrix4fv(u_ModelMat, false, Mat4x4.translate(this.focusedBlockPos).data); // TODO avoid constucting vecs here
             if(u_Color !== null) gl.uniform4f(u_Color, 0, 1, 0, 1);
             gl.drawArrays(gl.LINES, 0, MCWorld.BLOCKSELECT_CUBE_POINTS.length / 3);
         }
@@ -462,6 +462,7 @@ export class VChunk {
     private meshNormals: WebGLBuffer | null;
     private meshDirty: boolean;
     private numIndices: number = 0;
+    private mat: Mat4x4;
 
     constructor(blockData: Uint8Array) {
         this.blockData = blockData;
@@ -470,6 +471,7 @@ export class VChunk {
         this.meshUVs = null;
         this.meshNormals = null;
         this.meshDirty = true;
+        this.mat = Mat4x4.identity();
     }
 
     private static blockIdx(x: number, y: number, z: number): number {
@@ -660,7 +662,7 @@ export class VChunk {
     }
 
     render(stuff: MyGlStuff, chunkX: number, chunkY: number, chunkZ: number): void {
-        const { gl, program: { uniform: { u_BlockPos }, attrib: { a_Position, a_UV, a_Normal } } } = stuff;
+        const { gl, program: { uniform: { u_ModelMat }, attrib: { a_Position, a_UV, a_Normal } } } = stuff;
         if(this.meshVerts !== null && this.meshIndices !== null && this.meshUVs !== null && this.meshNormals !== null) {
             if(a_Position !== null) {
                 gl.bindBuffer(gl.ARRAY_BUFFER, this.meshVerts);
@@ -682,7 +684,14 @@ export class VChunk {
             // TODO probably rename BlockPos to something more general like Offset or whatever
             // TODO should probably add helpers for setting these rather than doing the null check every single time
             // our overall pos
-            if(u_BlockPos !== null) gl.uniform3f(u_BlockPos, chunkX, chunkY, chunkZ);
+            // if(u_BlockPos !== null) gl.uniform3f(u_BlockPos, chunkX, chunkY, chunkZ);
+            this.mat.setInPlace(
+                1, 0, 0, chunkX,
+                0, 1, 0, chunkY,
+                0, 0, 1, chunkZ,
+                0, 0, 0, 1,
+            );
+            if(u_ModelMat !== null) gl.uniformMatrix4fv(u_ModelMat, false, this.mat.data);
 
             // render
             if(debugToggles.has('render_wireframe')) {

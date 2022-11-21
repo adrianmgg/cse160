@@ -1,5 +1,6 @@
-import type { MyGlStuff } from "./main";
-import type { NTupleOf } from "./util";
+import { debugToggles } from "./debug_toggles.js";
+import type { MyGlStuff, MyStuff } from "./main.js";
+import { assert, NTupleOf, warnRateLimited } from "./util.js";
 
 export interface Renderable {
     render(stuff: MyGlStuff, mat: Mat4x4): void;
@@ -151,7 +152,15 @@ export class Mat4x4 {
             0, 0, 0, 1,
         );
     }
-    static translate(x: number, y: number, z: number): Mat4x4 {
+    static translate(x: number, y: number, z: number): Mat4x4;
+    static translate(vec: Vec): Mat4x4;
+    static translate(...args: NTupleOf<number, 3> | NTupleOf<Vec, 1>): Mat4x4 {
+        let x: number, y: number, z: number;
+        if(args.length === 1) {
+            ({x, y, z} = args[0]);
+        } else {
+            [x, y, z] = args;
+        }
         return Mat4x4.of(
             1, 0, 0, x,
             0, 1, 0, y,
@@ -219,7 +228,7 @@ export class Mat4x4 {
         );
     }
 
-    static rotateXYZ(tx: number, ty: number, tz: number): Mat4x4 {
+    rotateXYZInPlace(tx: number, ty: number, tz: number): Mat4x4 {
         // source: based on https://github.com/blender/blender/blob/594f47ecd2d5367ca936cf6fc6ec8168c2b360d0/source/blender/blenlib/intern/math_rotation.c#L1648-L1686
         const ci = Math.cos(tx);
         const cj = Math.cos(ty);
@@ -231,32 +240,56 @@ export class Mat4x4 {
         const cs = ci * sh;
         const sc = si * ch;
         const ss = si * sh;
-        return Mat4x4.of(
+        return this.setInPlace(
             cj * ch      , cj * sh     ,  -sj    ,  0,
             sj * sc - cs , sj * ss + cc,  cj * si,  0,
             sj * cc + ss , sj * cs - sc,  cj * ci,  0,
             0            , 0           ,  0      ,  1,
         );
     }
+    static rotateXYZ(tx: number, ty: number, tz: number): Mat4x4 {
+        return Mat4x4.identity().rotateXYZInPlace(tx, ty, tz);
+    }
 
-    static locRotScale(posX: number, posY: number, posZ: number, thetaX: number, thetaY: number, thetaZ: number, scaleX: number, scaleY: number, scaleZ: number): Mat4x4 {
+    locRotScaleInPlace(posX: number, posY: number, posZ: number, thetaX: number, thetaY: number, thetaZ: number, scaleX: number, scaleY: number, scaleZ: number): Mat4x4;
+    locRotScaleInPlace(pos: Vec, rot: Vec, scale: Vec): Mat4x4;
+    locRotScaleInPlace(...args: NTupleOf<Vec, 3> | NTupleOf<number, 9>): Mat4x4 {
+        let posX: number, posY: number, posZ: number, thetaX: number, thetaY: number, thetaZ: number, scaleX: number, scaleY: number, scaleZ: number;
+        if(args.length === 3) {
+            posX = args[0].x;
+            posY = args[0].y;
+            posZ = args[0].z;
+            thetaX = args[1].x;
+            thetaY = args[1].y;
+            thetaZ = args[1].z;
+            scaleX = args[2].x;
+            scaleY = args[2].y;
+            scaleZ = args[2].z;
+        } else {
+            [posX, posY, posZ, thetaX, thetaY, thetaZ, scaleX, scaleY, scaleZ] = args;
+        }
         // source: based on https://github.com/blender/blender/blob/blender-v3.0-release/source/blender/python/mathutils/mathutils_Matrix.c#L989-L1068
-        const m = Mat4x4.rotateXYZ(thetaX, thetaY, thetaZ);
+        this.rotateXYZInPlace(thetaX, thetaY, thetaZ);
         // scale mat
-        m.data[0 + (0 * 4)] *= scaleX;
-        m.data[0 + (1 * 4)] *= scaleX;
-        m.data[0 + (2 * 4)] *= scaleX;
-        m.data[1 + (0 * 4)] *= scaleY;
-        m.data[1 + (1 * 4)] *= scaleY;
-        m.data[1 + (2 * 4)] *= scaleY;
-        m.data[2 + (0 * 4)] *= scaleZ;
-        m.data[2 + (1 * 4)] *= scaleZ;
-        m.data[2 + (2 * 4)] *= scaleZ;
+        this.data[0 + (0 * 4)] *= scaleX;
+        this.data[0 + (1 * 4)] *= scaleX;
+        this.data[0 + (2 * 4)] *= scaleX;
+        this.data[1 + (0 * 4)] *= scaleY;
+        this.data[1 + (1 * 4)] *= scaleY;
+        this.data[1 + (2 * 4)] *= scaleY;
+        this.data[2 + (0 * 4)] *= scaleZ;
+        this.data[2 + (1 * 4)] *= scaleZ;
+        this.data[2 + (2 * 4)] *= scaleZ;
         // copy location into mat
-        m.data[0 + (3 * 4)] = posX;
-        m.data[1 + (3 * 4)] = posY;
-        m.data[2 + (3 * 4)] = posZ;
-        return m;
+        this.data[0 + (3 * 4)] = posX;
+        this.data[1 + (3 * 4)] = posY;
+        this.data[2 + (3 * 4)] = posZ;
+        return this;
+    }
+    static locRotScale(posX: number, posY: number, posZ: number, thetaX: number, thetaY: number, thetaZ: number, scaleX: number, scaleY: number, scaleZ: number): Mat4x4;
+    static locRotScale(pos: Vec, rot: Vec, scale: Vec): Mat4x4;
+    static locRotScale(...args: NTupleOf<Vec, 3> | NTupleOf<number, 9>): Mat4x4 {
+        return Mat4x4.prototype.locRotScaleInPlace.apply(Mat4x4.identity(), args as any); // TODO avoid any cast here
     }
 }
 
@@ -633,106 +666,125 @@ export class Camera {
 // }
 
 export class Mesh {
-    readonly verts: Float32Array;
-    readonly indices: Uint16Array;
-    constructor(verts: Float32Array | number[], indices: Uint16Array | number[]) {
-        // these shouldn't be constructed very often so i'm not too worried about any minor performance hits from the instanceof stuff
-        this.verts = verts instanceof Float32Array ? verts : new Float32Array(verts);
-        this.indices = indices instanceof Uint16Array ? indices : new Uint16Array(indices);
+    verts:   number[];
+    indices: number[];
+    uvs:     number[];
+    normals: number[];
+    private vertsBuf  : WebGLBuffer | null = null;
+    private indicesBuf: WebGLBuffer | null = null;
+    private uvsBuf    : WebGLBuffer | null = null;
+    private normalsBuf: WebGLBuffer | null = null;
+    dirty: boolean;
+    private get isCompiled(): boolean {
+        return this.vertsBuf !== null && this.indicesBuf !== null && this.uvsBuf !== null && this.normalsBuf !== null;
     }
-    
-    // https://github.com/blender/blender/blob/594f47ecd2d5367ca936cf6fc6ec8168c2b360d0/source/blender/bmesh/operators/bmo_primitive.c
-    
-    // numbers from webgl textbook (but modified to be unit cube)
-    static UNIT_CUBE = new Mesh([
-        .5, .5, .5,
-        -.5, .5, .5,
-        -.5, -.5, .5,
-        .5, -.5, .5,
-        .5, -.5, -.5,
-        .5, .5, -.5,
-        -.5, .5, -.5,
-        -.5, -.5, -.5,
-    ],[
-        0, 1, 2, 0, 2, 3, // front
-        0, 3, 4, 0, 4, 5, // right
-        0, 5, 6, 0, 6, 1, // up
-        1, 6, 7, 1, 7, 2, // left
-        7, 4, 3, 7, 3, 2, // down
-        4, 7, 6, 4, 6, 5, // back
-    ]);
+    get needsCompile(): boolean {
+        return this.dirty || !this.isCompiled;
+    }
+    mode: GLenum = 0; // TODO proper default value or make it null
 
-    // values from https://github.com/blender/blender/blob/594f47ecd2d5367ca936cf6fc6ec8168c2b360d0/source/blender/bmesh/operators/bmo_primitive.c#L36-L55
-    static UNIT_ICOSPHERE = new Mesh([
-        0.0      / 400,  0.0      / 400,  -200.0  / 400,
-        144.72   / 400,  -105.144 / 400,  -89.443 / 400,
-        -55.277  / 400,  -170.128 / 400,  -89.443 / 400,
-        -178.885 / 400,  0.0      / 400,  -89.443 / 400,
-        -55.277  / 400,  170.128  / 400,  -89.443 / 400,
-        144.72   / 400,  105.144  / 400,  -89.443 / 400,
-        55.277   / 400,  -170.128 / 400,  89.443  / 400,
-        -144.72  / 400,  -105.144 / 400,  89.443  / 400,
-        -144.72  / 400,  105.144  / 400,  89.443  / 400,
-        55.277   / 400,  170.128  / 400,  89.443  / 400,
-        178.885  / 400,  0.0      / 400,  89.443  / 400,
-        0.0      / 400,  0.0      / 400,  200.0   / 400,
-    ], [
-        0, 1, 2,  1, 0, 5,   0, 2, 3,  0, 3, 4,  0, 4, 5,  1, 5, 10,  2, 1, 6,
-        3, 2, 7,  4, 3, 8,   5, 4, 9,  1, 10, 6, 2, 6, 7,  3, 7, 8,   4, 8, 9,
-        5, 9, 10, 6, 10, 11, 7, 6, 11, 8, 7, 11, 9, 8, 11, 10, 9, 11,
-    ]);
+    constructor() {
+        this.verts = [];
+        this.indices = [];
+        this.uvs = [];
+        this.normals = [];
+        this.dirty = true;
+    }
 
-    // noticing that i'm using these a lot so may as well put em here
-    // TODO need a cleaner way of transforming meshes
-    static UNIT_CUBE_TOUCHING_XY = new Mesh(
-        Mesh.UNIT_CUBE.verts.map((v, i) => (i % 3 === 1) ? v + 0.5 : v),
-        Mesh.UNIT_CUBE.indices,
-    );
-    static UNIT_ICOSPHERE_TOUCHING_XY = new Mesh(
-        Mesh.UNIT_ICOSPHERE.verts.map((v, i) => (i % 3 === 1) ? v + 0.5 : v),
-        Mesh.UNIT_ICOSPHERE.indices,
-    );
+    compile({ gl }: MyGlStuff) {
+        // compile verts
+        if(this.vertsBuf !== null) gl.deleteBuffer(this.vertsBuf);
+        this.vertsBuf = gl.createBuffer();
+        assert(this.vertsBuf !== null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.vertsBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.verts), gl.STATIC_DRAW);
+        // compile indices
+        if(this.indicesBuf !== null) gl.deleteBuffer(this.indicesBuf);
+        this.indicesBuf = gl.createBuffer();
+        assert(this.indicesBuf !== null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.indicesBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Uint16Array(this.indices), gl.STATIC_DRAW);
+        // compile uvs
+        if(this.uvsBuf !== null) gl.deleteBuffer(this.uvsBuf);
+        this.uvsBuf = gl.createBuffer();
+        assert(this.uvsBuf !== null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.uvsBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.uvs), gl.STATIC_DRAW);
+        // compile normals
+        if(this.normalsBuf !== null) gl.deleteBuffer(this.normalsBuf);
+        this.normalsBuf = gl.createBuffer();
+        assert(this.normalsBuf !== null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.normalsBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.normals), gl.STATIC_DRAW);
+        // clear dirty flag
+        this.dirty = false;
+    }
 
-    static cylinder(divisions: number, center: Vec, radius: number, length: number, cap: boolean): Mesh {
-        const verts = new Float32Array(divisions * 2 * 3 + (cap ? 6 : 0)); // num divisions * 2 circles with that many divisions * 3 vals per vert
-        for(let i = 0; i < divisions; i++) {
-            const theta = (i / divisions) * Math.PI * 2;
-            const v1 = Vec.fromCylindrical(radius, theta, length / -2);
-            const v2 = Vec.fromCylindrical(radius, theta, length / 2);
-            const idx1 = i * 3;
-            const idx2 = idx1 + (divisions * 1 * 3);
-            verts[idx1 + 0] = v1.x;
-            verts[idx1 + 1] = v1.y;
-            verts[idx1 + 2] = v1.z;
-            verts[idx2 + 0] = v2.x;
-            verts[idx2 + 1] = v2.y;
-            verts[idx2 + 2] = v2.z;
-        }
-        if(cap) {
-            const idx = verts.length - 6;
-            verts[idx + 0] = 0;
-            verts[idx + 1] = length / -2;
-            verts[idx + 2] = 0;
-            verts[idx + 3] = 0;
-            verts[idx + 4] = length / 2;
-            verts[idx + 5] = 0;
-        }
-        const indices = [];
-        for(let i = 0; i < divisions; i++) {
-            const v1 = i;
-            const v2 = (i+1) % divisions;
-            const v3 = i + divisions;
-            const v4 = ((i+1) % divisions) + divisions;
-            indices.push(v2, v1, v4);
-            indices.push(v3, v4, v1);
-            if(cap) {
-                const v5 = divisions * 2;
-                const v6 = divisions * 2 + 1;
-                indices.push(v1, v2, v5, v3, v6, v4);
+    render(glStuff: MyGlStuff) {
+        if(this.vertsBuf !== null && this.uvsBuf !== null && this.indicesBuf !== null && this.normalsBuf !== null) {
+            const { gl, program: { attrib: { a_Normal, a_Position, a_UV } } } = glStuff;
+            if(a_Position !== null) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertsBuf);
+                gl.enableVertexAttribArray(a_Position);
+                gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
             }
+            if(a_UV !== null) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.uvsBuf);
+                gl.enableVertexAttribArray(a_UV);
+                gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
+            }
+            if(a_Normal !== null) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.normalsBuf);
+                gl.enableVertexAttribArray(a_Normal);
+                gl.vertexAttribPointer(a_Normal, 3, gl.FLOAT, false, 0, 0);
+            }
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indicesBuf);
+            gl.drawElements(this.mode, this.indices.length, gl.UNSIGNED_SHORT, 0);
+        } else {
+            warnRateLimited('tried to render mesh before it was compiled');
         }
-        return new Mesh(verts, indices);
     }
+
+    // static cylinder(divisions: number, center: Vec, radius: number, length: number, cap: boolean): Mesh {
+    //     const verts = new Float32Array(divisions * 2 * 3 + (cap ? 6 : 0)); // num divisions * 2 circles with that many divisions * 3 vals per vert
+    //     for(let i = 0; i < divisions; i++) {
+    //         const theta = (i / divisions) * Math.PI * 2;
+    //         const v1 = Vec.fromCylindrical(radius, theta, length / -2);
+    //         const v2 = Vec.fromCylindrical(radius, theta, length / 2);
+    //         const idx1 = i * 3;
+    //         const idx2 = idx1 + (divisions * 1 * 3);
+    //         verts[idx1 + 0] = v1.x;
+    //         verts[idx1 + 1] = v1.y;
+    //         verts[idx1 + 2] = v1.z;
+    //         verts[idx2 + 0] = v2.x;
+    //         verts[idx2 + 1] = v2.y;
+    //         verts[idx2 + 2] = v2.z;
+    //     }
+    //     if(cap) {
+    //         const idx = verts.length - 6;
+    //         verts[idx + 0] = 0;
+    //         verts[idx + 1] = length / -2;
+    //         verts[idx + 2] = 0;
+    //         verts[idx + 3] = 0;
+    //         verts[idx + 4] = length / 2;
+    //         verts[idx + 5] = 0;
+    //     }
+    //     const indices = [];
+    //     for(let i = 0; i < divisions; i++) {
+    //         const v1 = i;
+    //         const v2 = (i+1) % divisions;
+    //         const v3 = i + divisions;
+    //         const v4 = ((i+1) % divisions) + divisions;
+    //         indices.push(v2, v1, v4);
+    //         indices.push(v3, v4, v1);
+    //         if(cap) {
+    //             const v5 = divisions * 2;
+    //             const v6 = divisions * 2 + 1;
+    //             indices.push(v1, v2, v5, v3, v6, v4);
+    //         }
+    //     }
+    //     return new Mesh(verts, indices);
+    // }
 }
 
 export class Color {
@@ -752,33 +804,40 @@ export class Color {
     }
 }
 
-// export class Model implements Renderable {
-//     mesh: Mesh;
-//     mat: Mat4x4;
-//     color: Color;
-//     constructor(mesh: Mesh, mat?: Mat4x4, color?: Color) {
-//         this.mesh = mesh;
-//         this.mat = mat !== undefined ? mat : Mat4x4.identity();
-//         this.color = color !== undefined ? color : new Color(0, 0, 0, 1);
-//     }
+export class Transform {
+    pos: Vec = Vec.zero();
+    rot: Vec = Vec.zero();
+    scale: Vec = Vec.zero();
+    // TODO cache/track when dirty (would require changes to vec i think)
+    get mat(): Mat4x4 {
+        return Mat4x4.locRotScale(this.pos, this.rot, this.scale);
+    }
+}
 
-//     render(stuff: MyGlStuff, mat:Mat4x4) {
-//         const { gl, programInfo: { vars: { uniformLocations: { u_FragColor, u_ModelMat } } } } = stuff;
-//         const newMat = mat.matmul(this.mat);
-//         gl.bufferData(gl.ARRAY_BUFFER, this.mesh.verts, gl.STATIC_DRAW);
-//         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.mesh.indices, gl.STATIC_DRAW);
-//         gl.uniformMatrix4fv(u_ModelMat, false, newMat.data);
-//         // color
-//         if(u_FragColor !== null) gl.uniform4f(u_FragColor, this.color.r, this.color.g, this.color.b, this.color.a);
-//         // draw mesh
-//         gl.drawElements(gl.TRIANGLES, this.mesh.indices.length, gl.UNSIGNED_SHORT, 0);
-//         // // kinda janky (temporary) wireframe drawing
-//         // gl.uniform4f(u_FragColor, 0, 0, 1, 1);
-//         // for(let i = 0; i + 2 < this.mesh.verts.length; i += 3) {
-//         //     gl.drawElements(gl.LINE_LOOP, 3, gl.UNSIGNED_SHORT, i * 2);
-//         // }
-//     }
-// }
+export class Model implements Renderable {
+    mesh: Mesh;
+    transform: Transform = new Transform();
+    color: Color;
+    constructor(mesh: Mesh, color?: Color) {
+        this.mesh = mesh;
+        this.transform = new Transform();
+        this.color = color !== undefined ? color : new Color(0, 0, 0, 1);
+    }
+
+    render(glStuff: MyGlStuff, mat: Mat4x4 | null) {
+        const { gl, program: { uniform: { u_Color, u_ModelMat } } } = glStuff;
+        // matrix stuff
+        let curMat = this.transform.mat;
+        if(mat !== null) curMat = mat.matmul(curMat);
+        gl.uniformMatrix4fv(u_ModelMat, false, curMat.data);
+        // mesh
+        if(this.mesh.needsCompile) this.mesh.compile(glStuff);
+        // color
+        if(u_Color !== null) gl.uniform4f(u_Color, this.color.r, this.color.g, this.color.b, this.color.a);
+        // render
+        this.mesh.render(glStuff);
+    }
+}
 
 export class Quaternion {
     private v: Vec;

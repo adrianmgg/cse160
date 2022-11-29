@@ -1,3 +1,4 @@
+import { CanvasTexture, NearestFilter, NearestMipMapLinearFilter, RepeatWrapping, Texture, UVMapping } from "three";
 import { debugToggles } from "./debug_toggles";
 import { assert, isPow2, setFind, setMap, warnRateLimited } from "./util";
 
@@ -262,4 +263,22 @@ function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number, margin
     const mipImages = mipCanvases.map(([level, canvas]) => [level, canvas] as const);
 
     return {texturePositions, textures: mipImages, maxMipLevel, width: atlasSize, height: atlasSize};
+}
+
+export function atlasTo3JS(atlas: TextureAtlasInfo): Texture {
+    const tex = new Texture();
+    tex.image = atlas.textures[0]![1];
+    tex.generateMipmaps = false;
+    // tex.mipmaps = atlas.textures.map(([mipLevel, tex]) => tex);
+    for(const [mipLevel, t] of atlas.textures) {
+        tex.mipmaps[mipLevel] = t;
+    }
+    // TODO make the filters configurable
+    tex.magFilter = NearestFilter;
+    tex.minFilter = NearestMipMapLinearFilter;
+    tex.wrapS = RepeatWrapping;
+    tex.wrapT = RepeatWrapping;
+    tex.needsUpdate = true;
+    tex.mapping = UVMapping;
+    return tex;
 }

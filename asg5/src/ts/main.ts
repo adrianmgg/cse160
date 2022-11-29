@@ -1,7 +1,9 @@
 import { AmbientLight, BoxGeometry, Euler, Mesh, MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, PointLight, Scene, Vector3, WebGLRenderer } from 'three';
 import { getElementByIdAndValidate } from './util';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
-import { MCWorld } from './mc';
+import { MCWorld, TEXTURE_NAMES } from './mc';
+import { atlasImages, loadImages } from './texture';
+import { debugToggles, setupDebugToggles } from './debug_toggles';
 
 class KeysManager {
     private _prevHeldKeys: Set<string>;
@@ -44,6 +46,10 @@ class KeysManager {
 }
 
 async function main() {
+    setupDebugToggles();
+
+    const imagesPromise = loadImages([...TEXTURE_NAMES]);
+
     const rendererContainer = getElementByIdAndValidate('renderer_container', { document });
     const clickToPlayElem = getElementByIdAndValidate('click_to_play', { document });
 
@@ -53,7 +59,9 @@ async function main() {
 
     const keysManager = new KeysManager();
 
-    const world = await MCWorld.openWorld('new world');
+    const atlas = atlasImages(await imagesPromise);
+
+    const world = await MCWorld.openWorld('new world', atlas);
     scene.add(world);
 
     // const controls = new FirstPersonControls(camera, rendererContainer);
@@ -136,10 +144,6 @@ async function main() {
     }).observe(rendererContainer);
 
     {
-        const geom = new BoxGeometry(1, 1, 1);
-        const mat = new MeshStandardMaterial({color: 0xff00ff});
-        const cube = new Mesh(geom, mat);
-        scene.add(cube);
         const ambientLight = new AmbientLight(0xffffff, .2);
         scene.add(ambientLight);
         const light = new PointLight(0xffffff, 1, 100);
@@ -147,7 +151,7 @@ async function main() {
         scene.add(light);
     }
     // camera.position.z = 5;
-    camera.position.z = 5;
+    camera.position.y = 50;
 
     // controls.lookSpeed = 0.4;
     // controls.movementSpeed = 20;

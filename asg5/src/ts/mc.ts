@@ -1,6 +1,6 @@
 import { idbOpen, idbRequest2Promise } from './db';
 import { assert, debugAssert, Dict2D, mapRecord, NTupleOf, warnRateLimited } from './util';
-import type { TextureAtlasInfo } from './texture';
+import { atlasTo3JS, TextureAtlasInfo } from './texture';
 import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 import { debugToggles } from './debug_toggles';
 import { BoxGeometry, BufferAttribute, BufferGeometry, Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, Vector3 } from 'three';
@@ -29,6 +29,8 @@ const BLOCK_TEXTURES: Record<Block, null | string | readonly [front: string, rig
     [Block.BEDROCK]:     'bedrock',
 } as const;
 
+export const TEXTURE_NAMES: Set<string> = new Set(Object.values(BLOCK_TEXTURES).map(a => a === null ? [] : typeof a === 'string' ? [a] : a).flat());
+
 function _getTextureFor(block: Block, face: CubeFace, atlas: TextureAtlasInfo): DOMRectReadOnly | null {
     const a = BLOCK_TEXTURES[block];
     if(a === null) return null; // TODO avoid new here.
@@ -49,21 +51,23 @@ export class MCWorld extends Object3D {
     private readonly renderDistance: number = 2;
     private readonly noise: NoiseFunction3D;
     readonly blocksMat: Material;
+    readonly atlas: TextureAtlasInfo;
     // readonly worldObjects: Model[]; // TODO clean this system up
 
-    private constructor(db: IDBDatabase) {
+    private constructor(db: IDBDatabase, atlas: TextureAtlasInfo) {
         super();
         this.db = db;
         this.chunks = new Dict2D();
         this.noise = createNoise3D(alea('seed')); // TODO add seed option
-        this.blocksMat = new MeshStandardMaterial({color: 0xffffff});
-        // this.blocksMat = new MeshBasicMaterial({color: 0xffffff});
+        this.atlas = atlas;
+        // this.blocksMat = new MeshStandardMaterial({color: 0xffffff, map: atlasTo3JS(atlas) });
+        this.blocksMat = new MeshBasicMaterial({map: atlasTo3JS(atlas)});
         // this.worldObjects = [];
     }
 
-    static async openWorld(worldName: string): Promise<MCWorld> {
+    static async openWorld(worldName: string, atlas: TextureAtlasInfo): Promise<MCWorld> {
         const db = await idbOpen(`asg5world-${worldName}`, MC_WORLD_IDB_VERSION, this.upgradeWorldDB);
-        const world = new MCWorld(db);
+        const world = new MCWorld(db, atlas);
         const spawnChunk = await world.loadChunk(0, 0);
         // spawnChunk.setBlock(0, 0, 20, Block.GRASS);
         // await world.unloadChunk(0, 0);
@@ -463,7 +467,7 @@ export class Chunk extends Object3D {
 
     rebuildMeshes() {
         for(const [vChunk] of this.iterVChunks()) {
-            if(vChunk !== null) vChunk.rebuildMesh();
+            if(vChunk !== null) vChunk.rebuildMesh(this.world.atlas);
         }
     }
 
@@ -533,8 +537,8 @@ export class VChunk extends Mesh {
         return this.blockData;
     }
 
-    rebuildMesh() {
-        if(this.meshDirty) this.buildMesh();
+    rebuildMesh(atlas: TextureAtlasInfo) {
+        if(this.meshDirty) this.buildMesh(atlas);
     }
 
     private static readonly CUBE_FACE_OFFSETS: Record<CubeFace, readonly [number, number, number]> = {
@@ -580,7 +584,7 @@ export class VChunk extends Mesh {
         return [v.toArray(), v.toArray(), v.toArray(), v.toArray()] as const;
     });
 
-    private buildMesh() {
+    private buildMesh(atlas: TextureAtlasInfo) {
         const verts: number[] = [];
         const indices: number[] = [];
         const uvs: number[] = [];
@@ -611,13 +615,14 @@ export class VChunk extends Mesh {
                             }
                         }
                         elemIdx += faceVerts.length;
-                        // const tex = getTextureFor(block, face, stuff.atlas);
-                        // uvs.push(
-                        //     tex.left , tex.top   ,
-                        //     tex.right, tex.top   ,
-                        //     tex.right, tex.bottom,
-                        //     tex.left , tex.bottom,
-                        // );
+                        // const tex = getTextureFor(block, face, atlas);
+                        const tex = new DOMRectReadOnly(0, .5, .5, .5);
+                        uvs.push(
+                            tex.left , tex.top   ,
+                            tex.right, tex.top   ,
+                            tex.right, tex.bottom,
+                            tex.left , tex.bottom,
+                        );
                         for(const norm of VChunk.CUBE_FACE_NORMALS[face]) {
                             normals.push(...norm);
                         }
@@ -636,10 +641,11 @@ export class VChunk extends Mesh {
         this.geometry.setIndex(indices);
         this.geometry.setAttribute('position', new BufferAttribute(new Float32Array(verts), 3));
         this.geometry.setAttribute('normal', new BufferAttribute(new Float32Array(normals), 3));
-        // this.geometry.setAttribute('uv', new BufferAttribute(uvs, 2));
+        this.geometry.setAttribute('uv', new BufferAttribute(new Float32Array(uvs), 2));
         this.geometry.getIndex()!.needsUpdate = true;
         this.geometry.getAttribute('position').needsUpdate = true;
         this.geometry.getAttribute('normal').needsUpdate = true;
+        this.geometry.getAttribute('uv').needsUpdate = true;
         // TODO we can probably do the bounds calc more efficiently if we roll it ourselves
         this.geometry.computeBoundingBox();
         this.geometry.computeBoundingSphere();

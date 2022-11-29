@@ -8,3 +8,6 @@
 
 /asg4/src/js/**/*
 /asg4/.vscode/
+
+*.zip
+

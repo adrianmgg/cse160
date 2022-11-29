@@ -913,13 +913,13 @@ export class Color {
 export class Transform {
     pos: Vec = Vec.zero();
     rot: Vec = Vec.zero();
-    scale: Vec = Vec.zero();
+    scale: Vec = Vec.one();
     // TODO cache/track when dirty (would require changes to vec i think)
     get mat(): Mat4x4 {
-        const m = Mat4x4.identity();
-        m.translateInPlace(this.pos.x, this.pos.y, this.pos.z);
-        return m;
-        // return Mat4x4.locRotScale(this.pos, this.rot, this.scale);
+        // const m = Mat4x4.identity();
+        // m.translateInPlace(this.pos.x, this.pos.y, this.pos.z);
+        // return m;
+        return Mat4x4.locRotScale(this.pos, this.rot, this.scale);
     }
 }
 
@@ -934,11 +934,12 @@ export class Model implements Renderable {
     }
 
     render(glStuff: MyGlStuff, mat?: Mat4x4) {
-        const { gl, program: { uniform: { u_Color, u_ModelMat } } } = glStuff;
+        const { gl, program: { uniform: { u_Color, u_ModelMat, u_NormalMat } } } = glStuff;
         // matrix stuff
         let curMat = this.transform.mat;
         if(mat !== undefined) curMat = mat.matmul(curMat);
-        gl.uniformMatrix4fv(u_ModelMat, false, curMat.data);
+        if(u_ModelMat !== null) gl.uniformMatrix4fv(u_ModelMat, false, curMat.data);
+        if(u_NormalMat !== null) gl.uniformMatrix4fv(u_NormalMat, false, curMat.inverse().transpose().data); // TODO gotta add transposeInPlace
         // mesh
         if(this.mesh.needsCompile) this.mesh.compile(glStuff);
         // color
@@ -1009,6 +1010,21 @@ export class Quaternion {
     }
     inverse(): Quaternion {
         return this.clone().inverseInPlace();
+    }
+}
+
+export class PointLight {
+    color: Color;
+    pos: Vec;
+    private static LIGHT_PREVIEW_MODEL = new Model(Mesh.uvSphere(.25, 8), Color.fromRGBHex(0xffffff));
+    constructor() {
+        this.color = new Color(1, 1, 1, 1);
+        this.pos = Vec.zero();
+    }
+
+    render(glStuff: MyGlStuff) {
+        PointLight.LIGHT_PREVIEW_MODEL.transform.pos = this.pos;
+        PointLight.LIGHT_PREVIEW_MODEL.render(glStuff);
     }
 }
 

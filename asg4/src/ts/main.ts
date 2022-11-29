@@ -1,4 +1,4 @@
-import { Camera, Mesh, Vec, Mat4x4, Model } from './3d.js';
+import { Camera, Mesh, Vec, Mat4x4, Model, Color, PointLight } from './3d.js';
 import { debugToggles, setupDebugToggles } from './debug_toggles.js';
 import { getProgramVarLocations, loadProgramFromFiles, ProgramVarLocations } from './gl.js';
 import { Block, MCWorld } from './mc.js';
@@ -23,6 +23,7 @@ export type MyStuff = {
     camera: Camera;
     atlas: TextureAtlasInfo;
     input: InputInfo;
+    light: PointLight;
 };
 
 type InputInfo = {
@@ -60,14 +61,16 @@ async function main() {
             border: (level <= atlas.maxMipLevel)  ? '2px solid #0000' : '2px solid #F00',
         });
     }
-    // setupUI();
     const world = await setupWorld();
     const camera = new Camera();
     const inputInfo: InputInfo = {
         heldKeys: new Set(), pressedKeys: new Set(), releasedKeys: new Set(),
         heldMouseButtons: new Set(), pressedMouseButtons: new Set(), releasedMouseButtons: new Set(),
     };
-    const stuff: MyStuff = {glStuff, camera, world, atlas, input: inputInfo};
+    const light = new PointLight();
+    light.pos = Vec.of(12, 55, -10);
+    const stuff: MyStuff = {glStuff, camera, world, atlas, input: inputInfo, light};
+    setupUI(stuff);
     // TODO should load/restore player pos
     camera.pos = Vec.of(8, 50, 8);
     camera.rotX = Math.PI * (-1/2);
@@ -151,7 +154,7 @@ function setupWebGL({gl}: WebGL1Or2) {
 }
 
 const SHADER_ATTRIBUTE_NAMES = ['a_Position', 'a_UV', 'a_Normal'] as const;
-const SHADER_UNIFORM_NAMES = ['u_ModelMat', 'u_CameraMat', 'u_TextureAtlas', 'u_MaxTextureAtlasLOD', 'u_TextureAtlasDimensions', 'u_Color'] as const;
+const SHADER_UNIFORM_NAMES = ['u_ModelMat', 'u_CameraMat', 'u_NormalMat', 'u_TextureAtlas', 'u_MaxTextureAtlasLOD', 'u_TextureAtlasDimensions', 'u_Color', 'u_LightColor', 'u_LightPos'] as const;
 
 type MyProgramInfo = {
     program: WebGLProgram;
@@ -238,11 +241,19 @@ function setupTextures(atlas: TextureAtlasInfo, { gl, hasWebgl2, program: { unif
 async function setupWorld(): Promise<MCWorld> {
     const world = await MCWorld.openWorld('new world');
     // TODO should do this stuff elsewhere
-    const sphere = new Model(Mesh.uvSphere(1, 8));
-    sphere.transform.pos.x = 8;
-    sphere.transform.pos.y = 50;
-    sphere.transform.pos.z = -10;
-    world.worldObjects.push(sphere);
+    const numSpheres = 32;
+    const ringRadius = 16;
+    const sphereRadius = ringRadius * 2 * Math.PI / numSpheres / 2 * .8;
+    const spherePadding = ringRadius * 2 * Math.PI / numSpheres / 2 * .2;
+    const sphereMesh = Mesh.uvSphere(1, 8);
+    for(let i = 0; i < numSpheres; i++) {
+        const theta = (i / numSpheres) * Math.PI * 2;
+        const sphere = new Model(sphereMesh, Color.fromRGBHex(0xaa22aa));
+        sphere.transform.pos = Vec.fromPolarXZ(ringRadius, theta);
+        sphere.transform.pos.y = 50;
+        sphere.transform.scale = Vec.one().mulInPlace(sphereRadius);
+        world.worldObjects.push(sphere);
+    }
     return world;
 }
 
@@ -323,11 +334,16 @@ function renderTick(stuff: MyStuff, now: DOMHighResTimeStamp): void {
     stuff.world.rebuildMeshes(stuff);
 
     // TODO buffer stuff here for now, should move
-    const { glStuff: { gl, program: { uniform: { u_CameraMat } } } } = stuff;
+    const { light, glStuff: { gl, program: { uniform: { u_CameraMat, u_LightColor, u_LightPos } } } } = stuff;
     // gl.bufferData(gl.ARRAY_BUFFER, Mesh.UNIT_CUBE.verts, gl.STATIC_DRAW);
     // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Mesh.UNIT_CUBE.indices, gl.STATIC_DRAW);
 
+    if(u_LightColor !== null) gl.uniform4f(u_LightColor, light.color.r, light.color.g, light.color.b, light.color.a);
+    if(u_LightPos !== null) gl.uniform3fv(u_LightPos, light.pos.xyz());
+
     gl.uniformMatrix4fv(u_CameraMat, false, stuff.camera.world2viewMat().data);
+
+    stuff.light.render(stuff.glStuff);
 
     stuff.world.render(stuff.glStuff);
 
@@ -345,5 +361,32 @@ window.addEventListener('DOMContentLoaded', main);
 function clearCanvas({ gl }: MyGlStuff) {
     gl.clearColor(0.44313725490196076, 0.6862745098039216, 0.9686274509803922, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+}
+
+function setupUI(stuff: MyStuff) {
+    const lightColorInput = document.getElementById('light_color_input');
+    const lightX = document.getElementById('light_x');
+    const lightY = document.getElementById('light_y');
+    const lightZ = document.getElementById('light_z');
+    assert(lightColorInput !== null && lightColorInput instanceof HTMLInputElement);
+    assert(lightX !== null && lightX instanceof HTMLInputElement);
+    assert(lightY !== null && lightY instanceof HTMLInputElement);
+    assert(lightZ !== null && lightZ instanceof HTMLInputElement);
+    [lightX.valueAsNumber, lightY.valueAsNumber, lightZ.valueAsNumber] = stuff.light.pos.xyz();
+    const updateLightColor = () => {
+        stuff.light.color = Color.fromRGBHex(parseInt(lightColorInput.value.slice(1), 16));
+        stuff.light.color.a = 1;
+        stuff.light.pos.x = lightX.valueAsNumber;
+        stuff.light.pos.y = lightY.valueAsNumber;
+        stuff.light.pos.z = lightZ.valueAsNumber;
+    };
+    lightColorInput.addEventListener('input', updateLightColor);
+    lightColorInput.addEventListener('change', updateLightColor);
+    lightX.addEventListener('input', updateLightColor);
+    lightX.addEventListener('change', updateLightColor);
+    lightY.addEventListener('input', updateLightColor);
+    lightY.addEventListener('change', updateLightColor);
+    lightZ.addEventListener('input', updateLightColor);
+    lightZ.addEventListener('change', updateLightColor);
 }
 

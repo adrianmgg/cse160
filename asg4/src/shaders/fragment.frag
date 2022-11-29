@@ -37,6 +37,7 @@ uniform vec4 u_Color;
 INVAR vec3 v_TempDebugColor;
 INVAR vec2 v_UV;
 INVAR vec3 v_Normal;
+INVAR vec3 v_Light;
 DECLARE_OUTCOLOR
 
 vec4 sampleTextureAtlas(vec2 textureCoord);
@@ -85,7 +86,10 @@ vec4 sampleTextureAtlas(vec2 textureCoord) {
 void main() {
     #if defined(DEBUGTOGGLE_SHOW_NORMALS)
         OUTCOLOR = vec4(v_Normal, 1.0);
+    #elif defined(DEBUGTOGGLE_SHOW_UVS)
+        OUTCOLOR = vec4(v_UV, 0.0, 1.0);
     #else
-        OUTCOLOR = mix(sampleTextureAtlas(v_UV), u_Color, u_Color.a);
+        vec4 albedo = mix(sampleTextureAtlas(v_UV), u_Color, u_Color.a);
+        OUTCOLOR = albedo * vec4(v_Light, 1.0);
     #endif
 }

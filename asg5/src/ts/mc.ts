@@ -1,10 +1,11 @@
-import { idbOpen, idbRequest2Promise } from "./db.js";
-import { assert, debugAssert, Dict2D, mapRecord, NTupleOf, warnRateLimited } from "./util.js";
-import { Color, Mat4x4, Mesh, Model, Vec } from './3d.js';
-import type { MyGlStuff, MyStuff } from "./main.js";
-import type { TextureAtlasInfo } from "./texture.js";
-import { PerlinNoise } from "./noise.js";
-import { debugToggles } from "./debug_toggles.js";
+import { idbOpen, idbRequest2Promise } from './db';
+import { assert, debugAssert, Dict2D, mapRecord, NTupleOf, warnRateLimited } from './util';
+import type { TextureAtlasInfo } from './texture';
+import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
+import { debugToggles } from './debug_toggles';
+import { BoxGeometry, BufferAttribute, BufferGeometry, Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, Vector3 } from 'three';
+import alea from 'alea';
+import { backwardsVec, downVec, forwardsVec, leftVec, rightVec, upVec } from './threeutil';
 
 const MC_WORLD_IDB_VERSION = 1 as const;
 
@@ -42,31 +43,26 @@ function getTextureFor(block: Block, face: CubeFace, atlas: TextureAtlasInfo): D
     return _getTextureFor(block, face, atlas) ?? new DOMRectReadOnly();
 }
 
-const block_colors: Record<Block, Color> = {
-    [Block.AIR]:         Color.fromRGBHex(0xFFFFFF),
-    [Block.STONE]:       Color.fromRGBHex(0x747474),
-    [Block.GRASS]:       Color.fromRGBHex(0x589258),
-    [Block.DIRT]:        Color.fromRGBHex(0x785539),
-    [Block.COBBLESTONE]: Color.fromRGBHex(0x525252),
-    [Block.BEDROCK]:     Color.fromRGBHex(0x000000),
-}
-
-export class MCWorld {
+export class MCWorld extends Object3D {
     private readonly db: IDBDatabase;
     private readonly chunks: Dict2D<number, number, Chunk>;
     private readonly renderDistance: number = 2;
-    private readonly noise: PerlinNoise;
-    readonly worldObjects: Model[]; // TODO clean this system up
+    private readonly noise: NoiseFunction3D;
+    readonly blocksMat: Material;
+    // readonly worldObjects: Model[]; // TODO clean this system up
 
     private constructor(db: IDBDatabase) {
+        super();
         this.db = db;
         this.chunks = new Dict2D();
-        this.noise = new PerlinNoise(5489);
-        this.worldObjects = [];
+        this.noise = createNoise3D(alea('seed')); // TODO add seed option
+        this.blocksMat = new MeshStandardMaterial({color: 0xffffff});
+        // this.blocksMat = new MeshBasicMaterial({color: 0xffffff});
+        // this.worldObjects = [];
     }
 
     static async openWorld(worldName: string): Promise<MCWorld> {
-        const db = await idbOpen(worldName, MC_WORLD_IDB_VERSION, this.upgradeWorldDB);
+        const db = await idbOpen(`asg5world-${worldName}`, MC_WORLD_IDB_VERSION, this.upgradeWorldDB);
         const world = new MCWorld(db);
         const spawnChunk = await world.loadChunk(0, 0);
         // spawnChunk.setBlock(0, 0, 20, Block.GRASS);
@@ -87,6 +83,7 @@ export class MCWorld {
         // console.log(`loading chunk at ${chunkX},${chunkZ}`);
         const chunk = await this.dbGetOrCreateChunk(chunkX, chunkZ);
         this.chunks.set(chunkX, chunkZ, chunk);
+        this.add(chunk);
         return chunk;
     }
 
@@ -94,8 +91,10 @@ export class MCWorld {
         const chunk = this.chunks.get(chunkX, chunkY);
         if(chunk === undefined) return;
         // console.log(`unloading chunk at ${chunkX},${chunkY}`);
+        this.remove(chunk);
         await this.dbSaveChunk(chunk);
         this.chunks.del(chunkX, chunkY);
+        chunk.dispose();
     }
 
     private async dbGetChunk(chunkX: number, chunkZ: number): Promise<Chunk | null> {
@@ -105,7 +104,7 @@ export class MCWorld {
                 .get([chunkX, chunkZ])
         );
         if(chunkData === undefined) return null;
-        else return await Chunk.fromDB(chunkData);
+        else return await Chunk.fromDB(this, chunkData);
     }
 
     private async dbGetOrCreateChunk(chunkX: number, chunkZ: number): Promise<Chunk> {
@@ -113,7 +112,7 @@ export class MCWorld {
         if(existingChunk !== null) {
             return existingChunk;
         }
-        const newChunk = await Chunk.newChunk(chunkX, chunkZ, this.noise);
+        const newChunk = await Chunk.newChunk(this, chunkX, chunkZ, this.noise);
         // TODO do worldgen here (or maybe in newChunk)
         await idbRequest2Promise(
             this.db.transaction('chunks', 'readwrite')
@@ -140,59 +139,59 @@ export class MCWorld {
         }
     }
 
-    rebuildMeshes(stuff: MyStuff) {
+    rebuildMeshes() {
         for(const [chunk] of this.chunks) {
-            chunk.rebuildMeshes(stuff);
+            chunk.rebuildMeshes();
         }
     }
 
-    private static readonly BLOCKSELECT_CUBE_POINTS = new Float32Array([
-        0,0,0, 0,0,1,  0,0,1, 0,1,1,  0,1,1, 0,1,0,  0,1,0, 0,0,0,
-        1,0,0, 1,0,1,  1,0,1, 1,1,1,  1,1,1, 1,1,0,  1,1,0, 1,0,0,
-        0,0,0, 1,0,0,  0,0,1, 1,0,1,  0,1,1, 1,1,1,  0,1,0, 1,1,0,
-    ].map(n => (n - 0.5) * 1.01 + 0.5));
-    private blockSelectBuf: WebGLBuffer | null = null; // TODO handle this better
-    render(stuff: MyGlStuff): void {
-        const { gl, program: { attrib: { a_Position }, uniform: { u_ModelMat, u_Color } } } = stuff;
-        if(u_Color !== null) gl.uniform4f(u_Color, 0, 0, 0, 0);
-        // render chunks
-        if(!debugToggles.has('no_draw_chunks')) {
-            for(const [chunk] of this.chunks) {
-                chunk.render(stuff);
-            }
-        }
+    // private static readonly BLOCKSELECT_CUBE_POINTS = new Float32Array([
+    //     0,0,0, 0,0,1,  0,0,1, 0,1,1,  0,1,1, 0,1,0,  0,1,0, 0,0,0,
+    //     1,0,0, 1,0,1,  1,0,1, 1,1,1,  1,1,1, 1,1,0,  1,1,0, 1,0,0,
+    //     0,0,0, 1,0,0,  0,0,1, 1,0,1,  0,1,1, 1,1,1,  0,1,0, 1,1,0,
+    // ].map(n => (n - 0.5) * 1.01 + 0.5));
+    // private blockSelectBuf: WebGLBuffer | null = null; // TODO handle this better
+    // render(stuff: MyGlStuff): void {
+    //     const { gl, program: { attrib: { a_Position }, uniform: { u_ModelMat, u_Color } } } = stuff;
+    //     if(u_Color !== null) gl.uniform4f(u_Color, 0, 0, 0, 0);
+    //     // render chunks
+    //     if(!debugToggles.has('no_draw_chunks')) {
+    //         for(const [chunk] of this.chunks) {
+    //             chunk.render(stuff);
+    //         }
+    //     }
 
-        // TODO scissor section in a corner & draw a minimap?
+    //     // TODO scissor section in a corner & draw a minimap?
 
-        // render selected block outline
-        // TODO should do this stuff elsewhere
-        if(this.blockSelectBuf === null) {
-            this.blockSelectBuf = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.blockSelectBuf);
-            gl.bufferData(gl.ARRAY_BUFFER, MCWorld.BLOCKSELECT_CUBE_POINTS, gl.STATIC_DRAW);
-        }
-        if(this.focusedBlockPos !== null) {
-            if(a_Position !== null) {
-                gl.bindBuffer(gl.ARRAY_BUFFER, this.blockSelectBuf);
-                gl.enableVertexAttribArray(a_Position);
-                gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
-            }
-            if(u_ModelMat !== null) gl.uniformMatrix4fv(u_ModelMat, false, Mat4x4.translate(this.focusedBlockPos).data); // TODO avoid constucting vecs here
-            if(u_Color !== null) gl.uniform4f(u_Color, 0, 1, 0, 1);
-            gl.drawArrays(gl.LINES, 0, MCWorld.BLOCKSELECT_CUBE_POINTS.length / 3);
-        }
+    //     // render selected block outline
+    //     // TODO should do this stuff elsewhere
+    //     if(this.blockSelectBuf === null) {
+    //         this.blockSelectBuf = gl.createBuffer();
+    //         gl.bindBuffer(gl.ARRAY_BUFFER, this.blockSelectBuf);
+    //         gl.bufferData(gl.ARRAY_BUFFER, MCWorld.BLOCKSELECT_CUBE_POINTS, gl.STATIC_DRAW);
+    //     }
+    //     if(this.focusedBlockPos !== null) {
+    //         if(a_Position !== null) {
+    //             gl.bindBuffer(gl.ARRAY_BUFFER, this.blockSelectBuf);
+    //             gl.enableVertexAttribArray(a_Position);
+    //             gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+    //         }
+    //         if(u_ModelMat !== null) gl.uniformMatrix4fv(u_ModelMat, false, Mat4x4.translate(this.focusedBlockPos).data); // TODO avoid constucting vecs here
+    //         if(u_Color !== null) gl.uniform4f(u_Color, 0, 1, 0, 1);
+    //         gl.drawArrays(gl.LINES, 0, MCWorld.BLOCKSELECT_CUBE_POINTS.length / 3);
+    //     }
 
-        // render other models
-        for(const model of this.worldObjects) {
-            model.render(stuff);
-        }
-    }
+    //     // render other models
+    //     for(const model of this.worldObjects) {
+    //         model.render(stuff);
+    //     }
+    // }
 
     // TODO should move player pos into world eventually, then this can be computed from that rather
     //      than passed in
     private playerChunkX: number = 0;
     private playerChunkZ: number = 0;
-    updatePlayerPos(pos: Vec) {
+    updatePlayerPos(pos: Vector3) {
         this.playerChunkX = Math.floor(pos.x / 16);
         this.playerChunkZ = Math.floor(pos.z / 16);
     }
@@ -257,81 +256,81 @@ export class MCWorld {
         chunk.setBlock(x - (cX * 16), y, z - (cZ * 16), block);
     }
 
-    private focusedBlockPos: Vec | null = null;
-    focusBlock(v: Vec | null) {
+    private focusedBlockPos: Vector3 | null = null;
+    focusBlock(v: Vector3 | null) {
         this.focusedBlockPos = (v === null) ? null : v.clone();
     }
 
-    // implementation of "A fast voxel traversal algorithm for ray tracing." by John Amanatides and Andrew Woo
-    intersect(pos: Vec, dir: Vec, maxDistance: number): null | readonly [Vec, Block] {
-        // "The initialization phase begins by identifying the voxel in which the ray origin is
-        //  found"
-        let curBlockPos = pos.floor();
-        // "stepX and stepY are initialized to either 1 or -1 indicating whether X and Y are
-        //  incremented or decremented as the ray crosses voxel boundaries (this is determined by
-        //  the sign of the x and y components of v)""
-        let step = dir.sign();
-        // "determine the value of t at which the ray crosses the first ... voxel boundary"
-        const maxT = curBlockPos.add(step).subInPlace(pos).divInPlace(dir);
-        // "compute ... how far along the ray we must move (in units of t) for the ... component of
-        //  such a movement to equal the width of a voxel"
-        const delta = step.div(dir);
+    // // implementation of "A fast voxel traversal algorithm for ray tracing." by John Amanatides and Andrew Woo
+    // intersect(pos: Vector3, dir: Vector3, maxDistance: number): null | readonly [Vec, Block] {
+    //     // "The initialization phase begins by identifying the voxel in which the ray origin is
+    //     //  found"
+    //     let curBlockPos = pos.floor();
+    //     // "stepX and stepY are initialized to either 1 or -1 indicating whether X and Y are
+    //     //  incremented or decremented as the ray crosses voxel boundaries (this is determined by
+    //     //  the sign of the x and y components of v)""
+    //     let step = dir.sign();
+    //     // "determine the value of t at which the ray crosses the first ... voxel boundary"
+    //     const maxT = curBlockPos.add(step).subInPlace(pos).divInPlace(dir);
+    //     // "compute ... how far along the ray we must move (in units of t) for the ... component of
+    //     //  such a movement to equal the width of a voxel"
+    //     const delta = step.div(dir);
 
-        if(Number.isNaN(maxT.x)) maxT.x = Infinity;
-        if(Number.isNaN(maxT.y)) maxT.y = Infinity;
-        if(Number.isNaN(maxT.z)) maxT.z = Infinity;
-        if(Number.isNaN(delta.x)) delta.x = 0;
-        if(Number.isNaN(delta.y)) delta.y = 0;
-        if(Number.isNaN(delta.z)) delta.z = 0;
+    //     if(Number.isNaN(maxT.x)) maxT.x = Infinity;
+    //     if(Number.isNaN(maxT.y)) maxT.y = Infinity;
+    //     if(Number.isNaN(maxT.z)) maxT.z = Infinity;
+    //     if(Number.isNaN(delta.x)) delta.x = 0;
+    //     if(Number.isNaN(delta.y)) delta.y = 0;
+    //     if(Number.isNaN(delta.z)) delta.z = 0;
 
-        // if(dir.x === 0 && dir.z === 0 && dir.y !== 0) {
-        //     // console.log({dir, step, maxT, delta, curBlockPos: curBlockPos.clone()});
-        //     console.log(curBlockPos.add(step), curBlockPos.add(step).subInPlace(pos), curBlockPos.add(step).subInPlace(pos).divInPlace(dir));
-        // }
+    //     // if(dir.x === 0 && dir.z === 0 && dir.y !== 0) {
+    //     //     // console.log({dir, step, maxT, delta, curBlockPos: curBlockPos.clone()});
+    //     //     console.log(curBlockPos.add(step), curBlockPos.add(step).subInPlace(pos), curBlockPos.add(step).subInPlace(pos).divInPlace(dir));
+    //     // }
 
-        // incremental phase
-        // (i've modified the algorithm to use a maximum distance cutoff rather than preset bounds)
-        let distanceSoFarPrev: number | null = null;
-        let distanceSoFar: number = 0;
-        while(true) {
-            // console.log(distanceSoFar);
-            // check current block
-            const curBlock = this.getBlock(curBlockPos.x, curBlockPos.y, curBlockPos.z);
-            if(curBlock !== Block.AIR) {
-                // return [pos.add(dir.mul(distanceSoFar)), ] as const;
-                return [curBlockPos, curBlock];
-            }
+    //     // incremental phase
+    //     // (i've modified the algorithm to use a maximum distance cutoff rather than preset bounds)
+    //     let distanceSoFarPrev: number | null = null;
+    //     let distanceSoFar: number = 0;
+    //     while(true) {
+    //         // console.log(distanceSoFar);
+    //         // check current block
+    //         const curBlock = this.getBlock(curBlockPos.x, curBlockPos.y, curBlockPos.z);
+    //         if(curBlock !== Block.AIR) {
+    //             // return [pos.add(dir.mul(distanceSoFar)), ] as const;
+    //             return [curBlockPos, curBlock];
+    //         }
 
-            // do the next incremental phase
-            if(maxT.x < maxT.y) {
-                if(maxT.x < maxT.z) {
-                    curBlockPos.x += step.x;
-                    maxT.x += delta.x;
-                    distanceSoFar += delta.x;
-                } else {
-                    curBlockPos.z += step.z;
-                    maxT.z += delta.z;
-                    distanceSoFar += delta.z;
-                }
-            } else {
-                if(maxT.y < maxT.z) {
-                    curBlockPos.y += step.y;
-                    maxT.y += delta.y;
-                    distanceSoFar += delta.y;
-                } else {
-                    curBlockPos.z += step.z;
-                    maxT.z += delta.z;
-                    distanceSoFar += delta.z;
-                }
-            }
+    //         // do the next incremental phase
+    //         if(maxT.x < maxT.y) {
+    //             if(maxT.x < maxT.z) {
+    //                 curBlockPos.x += step.x;
+    //                 maxT.x += delta.x;
+    //                 distanceSoFar += delta.x;
+    //             } else {
+    //                 curBlockPos.z += step.z;
+    //                 maxT.z += delta.z;
+    //                 distanceSoFar += delta.z;
+    //             }
+    //         } else {
+    //             if(maxT.y < maxT.z) {
+    //                 curBlockPos.y += step.y;
+    //                 maxT.y += delta.y;
+    //                 distanceSoFar += delta.y;
+    //             } else {
+    //                 curBlockPos.z += step.z;
+    //                 maxT.z += delta.z;
+    //                 distanceSoFar += delta.z;
+    //             }
+    //         }
 
-            if(distanceSoFar > maxDistance || distanceSoFar === distanceSoFarPrev) {
-                break;
-            }
-            distanceSoFarPrev = distanceSoFar;
-        } // while(distanceSoFar <= maxDistance);
-        return null;
-    }
+    //         if(distanceSoFar > maxDistance || distanceSoFar === distanceSoFarPrev) {
+    //             break;
+    //         }
+    //         distanceSoFarPrev = distanceSoFar;
+    //     } // while(distanceSoFar <= maxDistance);
+    //     return null;
+    // }
 }
 
 type DBChunkData = {
@@ -340,12 +339,20 @@ type DBChunkData = {
 };
 type DBVChunkData = Uint8Array;
 
-export class Chunk {
+export class Chunk extends Object3D {
     readonly chunkPos: Readonly<[number, number]>;
     readonly vChunks: NTupleOf<VChunk | null, 16>;
-    private constructor(chunkX: number, chunkZ: number, vChunks: Chunk['vChunks']) {
+    private readonly world: MCWorld;
+    private constructor(world: MCWorld, chunkX: number, chunkZ: number, vChunks: Chunk['vChunks']) {
+        super();
+        this.world = world;
         this.chunkPos = [chunkX, chunkZ];
         this.vChunks = vChunks;
+        this.position.x = chunkX * 16;
+        this.position.z = chunkZ * 16;
+        for(const vChunk of vChunks) {
+            if(vChunk !== null) this.add(vChunk);
+        }
     }
 
     get chunkX(): number { return this.chunkPos[0]; }
@@ -356,10 +363,13 @@ export class Chunk {
         assert(vc !== undefined, 'vchunk index out of range');
         return vc;
     }
-    private getOrCreateVChunk(vChunkY: number): VChunk {
+    private getOrCreateVChunk(material: Material, vChunkY: number): VChunk {
         const existingVC = this.getVChunk(vChunkY);
         if(existingVC !== null) return existingVC;
-        return this.vChunks[vChunkY] = VChunk.newVChunk();
+        const newVC = this.vChunks[vChunkY] = VChunk.newVChunk(material);
+        newVC.position.y = vChunkY * 16;
+        this.add(newVC);
+        return newVC;
     }
 
     private static vcIdx(y: number): number {
@@ -375,7 +385,7 @@ export class Chunk {
 
     setBlock(x: number, y: number, z: number, block: Block) {
         const vcY = Chunk.vcIdx(y);
-        const vc = this.getOrCreateVChunk(vcY);
+        const vc = this.getOrCreateVChunk(this.world.blocksMat, vcY);
         vc.setBlock(x, y - (vcY * 16), z, block);
     }
 
@@ -395,7 +405,7 @@ export class Chunk {
         }
     }
 
-    private async doWorldgen(noise: PerlinNoise): Promise<void> {
+    private async doWorldgen(noise: NoiseFunction3D): Promise<void> {
         console.log(`running worldgen for chunk ${this.chunkPos}`);
         // this.fillArea(0,  0, 0, 15,  0, 15, Block.BEDROCK);
         // this.fillArea(0,  1, 0, 15, 30, 15, Block.STONE);
@@ -409,7 +419,7 @@ export class Chunk {
         const worldScale = 16 / 18.712891738912;
         for(let x = 0; x < 16; x++) {
             for(let z = 0; z < 16; z++) {
-                const sample = noise.sample((this.chunkX + (x / 16)) * worldScale, (this.chunkZ + (z / 16)) * worldScale) / 2 + 0.5;
+                const sample = noise((this.chunkX + (x / 16)) * worldScale, 0, (this.chunkZ + (z / 16)) * worldScale) / 2 + 0.5;
                 // const sample = noise.sample((this.chunkX*16 + x) / 32, (this.chunkZ*16 + z) / 32) / 2 + 0.5;
                 const height = 30 + Math.floor(sample * 16);
                 // const height = (this.chunkX*16+x) % 200;
@@ -421,14 +431,19 @@ export class Chunk {
         }
     }
 
-    static async newChunk(chunkX: number, chunkZ: number, noise: PerlinNoise): Promise<Chunk> {
-        const chunk = new Chunk(chunkX, chunkZ, new Array<null>(16).fill(null) as NTupleOf<null, 16>);
+    static async newChunk(world: MCWorld, chunkX: number, chunkZ: number, noise: NoiseFunction3D): Promise<Chunk> {
+        const chunk = new Chunk(world, chunkX, chunkZ, new Array<null>(16).fill(null) as NTupleOf<null, 16>);
         chunk.doWorldgen(noise);
         return chunk;
     }
 
-    static fromDB(data: DBChunkData): Chunk {
-        return new Chunk(data.chunkPos[0], data.chunkPos[1], data.vChunks.map(vc => vc === null ? null : VChunk.fromDB(vc)) as NTupleOf<VChunk | null, 16>);
+    static fromDB(world: MCWorld, data: DBChunkData): Chunk {
+        return new Chunk(world, data.chunkPos[0], data.chunkPos[1], data.vChunks.map((vc, i) => {
+            if(vc === null) return null;
+            const vChunk = VChunk.fromDB(world.blocksMat, vc);
+            vChunk.position.y = i * 16;
+            return vChunk;
+        }) as NTupleOf<VChunk | null, 16>);
     }
 
     toDB(): DBChunkData {
@@ -446,34 +461,39 @@ export class Chunk {
         }
     }
 
-    rebuildMeshes(stuff: MyStuff) {
+    rebuildMeshes() {
         for(const [vChunk] of this.iterVChunks()) {
-            if(vChunk !== null) vChunk.rebuildMesh(stuff);
+            if(vChunk !== null) vChunk.rebuildMesh();
         }
     }
 
-    render(stuff: MyGlStuff): void {
-        for(let i = 0; i < 16; i++) {
-            const vChunk = this.vChunks[i];
-            debugAssert(vChunk !== undefined);
-            if(vChunk === null || vChunk === undefined) continue;
-            vChunk.render(stuff, this.chunkPos[0] * 16, i * 16, this.chunkPos[1] * 16);
+    // render(): void {
+    //     for(let i = 0; i < 16; i++) {
+    //         const vChunk = this.vChunks[i];
+    //         debugAssert(vChunk !== undefined);
+    //         if(vChunk === null || vChunk === undefined) continue;
+    //         vChunk.render(stuff, this.chunkPos[0] * 16, i * 16, this.chunkPos[1] * 16);
+    //     }
+    // }
+
+    dispose() {
+        for(const vChunk of this.vChunks) {
+            if(vChunk !== null) vChunk.dispose();
         }
     }
 }
 
-export class VChunk {
+export class VChunk extends Mesh {
     private readonly blockData: Uint8Array;
-    private mesh: Mesh;
+    // private geometry: BufferGeometry;
     /* whether the mesh is out of sync with the current block data */
     private meshDirty: boolean;
-    private mat: Mat4x4;
 
-    constructor(blockData: Uint8Array) {
-        this.mesh = new Mesh();
+    constructor(material: Material, blockData: Uint8Array) {
+        super(new BufferGeometry(), material);
         this.blockData = blockData;
         this.meshDirty = true;
-        this.mat = Mat4x4.identity();
+        // this.mat = Mat4x4.identity();
     }
 
     private static blockIdx(x: number, y: number, z: number): number {
@@ -501,20 +521,20 @@ export class VChunk {
         this.meshDirty = true;
     }
 
-    static newVChunk(): VChunk {
-        return new VChunk(new Uint8Array(16 * 16 * 16));
+    static newVChunk(material: Material): VChunk {
+        return new VChunk(material, new Uint8Array(16 * 16 * 16));
     }
 
-    static fromDB(data: DBVChunkData): VChunk {
-        return new VChunk(data);
+    static fromDB(material: Material, data: DBVChunkData): VChunk {
+        return new VChunk(material, data);
     }
 
     toDB(): DBVChunkData {
         return this.blockData;
     }
 
-    rebuildMesh(stuff: MyStuff) {
-        if(this.meshDirty) this.buildMesh(stuff);
+    rebuildMesh() {
+        if(this.meshDirty) this.buildMesh();
     }
 
     private static readonly CUBE_FACE_OFFSETS: Record<CubeFace, readonly [number, number, number]> = {
@@ -550,21 +570,21 @@ export class VChunk {
     //     [CubeFace.BACK]:  [0, 0, 0, 0, 0, 0, 0, 0],
     // } as const;
     private static readonly CUBE_FACE_NORMALS: Record<CubeFace, Readonly<NTupleOf<NTupleOf<number, 3>, 4>>> = mapRecord({
-        [CubeFace.FRONT]: Vec.forwards() ,
-        [CubeFace.RIGHT]: Vec.right()    ,
-        [CubeFace.UP   ]: Vec.up()       ,
-        [CubeFace.LEFT ]: Vec.left()     ,
-        [CubeFace.DOWN ]: Vec.down()     ,
-        [CubeFace.BACK ]: Vec.backwards(),
+        [CubeFace.FRONT]: forwardsVec() ,
+        [CubeFace.RIGHT]: rightVec()    ,
+        [CubeFace.UP   ]: upVec()       ,
+        [CubeFace.LEFT ]: leftVec()     ,
+        [CubeFace.DOWN ]: downVec()     ,
+        [CubeFace.BACK ]: backwardsVec(),
     } as const, (k, v) => {
-        return [v.xyz(), v.xyz(), v.xyz(), v.xyz()] as const;
+        return [v.toArray(), v.toArray(), v.toArray(), v.toArray()] as const;
     });
 
-    private buildMesh(stuff: MyStuff) {
-        this.mesh.verts = [];
-        this.mesh.indices = [];
-        this.mesh.uvs = [];
-        this.mesh.normals = [];
+    private buildMesh() {
+        const verts: number[] = [];
+        const indices: number[] = [];
+        const uvs: number[] = [];
+        const normals: number[] = [];
         let elemIdx = 0;
         for(let x = 0; x < 16; x++) {
             for(let y = 0; y < 16; y++) {
@@ -576,10 +596,10 @@ export class VChunk {
                         if(this.hasBlockAt(x+ox, y+oy, z+oz)) continue;
                         const faceVerts = VChunk.CUBE_FACE_VERTS[face];
                         for(const [vx, vy, vz] of faceVerts) {
-                            this.mesh.verts.push(x+vx, y+vy, z+vz);
+                            verts.push(x+vx, y+vy, z+vz);
                         }
                         if(debugToggles.has('render_wireframe')) {
-                            this.mesh.indices.push(
+                            indices.push(
                                 elemIdx + 0, elemIdx + 1,
                                 elemIdx + 1, elemIdx + 2,
                                 elemIdx + 2, elemIdx + 3,
@@ -587,89 +607,101 @@ export class VChunk {
                             );
                         } else {
                             for(const tri of VChunk.CUBE_FACE_INDICES[face]) {
-                                for(const idx of tri) this.mesh.indices.push(elemIdx + idx);
+                                for(const idx of tri) indices.push(elemIdx + idx);
                             }
                         }
                         elemIdx += faceVerts.length;
-                        const tex = getTextureFor(block, face, stuff.atlas);
-                        this.mesh.uvs.push(
-                            tex.left , tex.top   ,
-                            tex.right, tex.top   ,
-                            tex.right, tex.bottom,
-                            tex.left , tex.bottom,
-                        );
+                        // const tex = getTextureFor(block, face, stuff.atlas);
+                        // uvs.push(
+                        //     tex.left , tex.top   ,
+                        //     tex.right, tex.top   ,
+                        //     tex.right, tex.bottom,
+                        //     tex.left , tex.bottom,
+                        // );
                         for(const norm of VChunk.CUBE_FACE_NORMALS[face]) {
-                            this.mesh.normals.push(...norm);
+                            normals.push(...norm);
                         }
                     }
                 }
             }
         }
-        if(debugToggles.has('render_wireframe')) {
-            this.mesh.mode = stuff.glStuff.gl.LINES;
-        } else {
-            this.mesh.mode = stuff.glStuff.gl.TRIANGLES;
-        }
-        this.mesh.compile(stuff.glStuff);
+        // if(debugToggles.has('render_wireframe')) {
+        //     this.mesh.mode = stuff.glStuff.gl.LINES;
+        // } else {
+        //     this.mesh.mode = stuff.glStuff.gl.TRIANGLES;
+        // }
+        // this.mesh.compile(stuff.glStuff);
+        // compile mesh
+        // TODO better to typedarray-ify these?
+        this.geometry.setIndex(indices);
+        this.geometry.setAttribute('position', new BufferAttribute(new Float32Array(verts), 3));
+        this.geometry.setAttribute('normal', new BufferAttribute(new Float32Array(normals), 3));
+        // this.geometry.setAttribute('uv', new BufferAttribute(uvs, 2));
+        this.geometry.getIndex()!.needsUpdate = true;
+        this.geometry.getAttribute('position').needsUpdate = true;
+        this.geometry.getAttribute('normal').needsUpdate = true;
+        // TODO we can probably do the bounds calc more efficiently if we roll it ourselves
+        this.geometry.computeBoundingBox();
+        this.geometry.computeBoundingSphere();
         this.meshDirty = false;
     }
-    
-    cleanup(stuff: MyStuff) {
-        this.mesh.freeCompiled(stuff.glStuff);
+
+    dispose() {
+        this.geometry.dispose();
     }
 
-    render(stuff: MyGlStuff, chunkX: number, chunkY: number, chunkZ: number): void {
-        const { gl, program: { uniform: { u_ModelMat }, attrib: { a_Position, a_UV, a_Normal } } } = stuff;
-        if(u_ModelMat !== null) {
-            this.mat.setInPlace(
-                1, 0, 0, chunkX,
-                0, 1, 0, chunkY,
-                0, 0, 1, chunkZ,
-                0, 0, 0, 1,
-            );
-            gl.uniformMatrix4fv(u_ModelMat, false, this.mat.data);
-        }
-        this.mesh.render(stuff);
-
-    //     if(this.meshVerts !== null && this.meshIndices !== null && this.meshUVs !== null && this.meshNormals !== null) {
-    //         if(a_Position !== null) {
-    //             gl.bindBuffer(gl.ARRAY_BUFFER, this.meshVerts);
-    //             gl.enableVertexAttribArray(a_Position);
-    //             gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
-    //         }
-    //         if(a_UV !== null) {
-    //             gl.bindBuffer(gl.ARRAY_BUFFER, this.meshUVs);
-    //             gl.enableVertexAttribArray(a_UV);
-    //             gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
-    //         }
-    //         if(a_Normal !== null) {
-    //             gl.bindBuffer(gl.ARRAY_BUFFER, this.meshNormals);
-    //             gl.enableVertexAttribArray(a_Normal);
-    //             gl.vertexAttribPointer(a_Normal, 3, gl.FLOAT, false, 0, 0);
-    //         }
-    //         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices);
-
-    //         // TODO probably rename BlockPos to something more general like Offset or whatever
-    //         // TODO should probably add helpers for setting these rather than doing the null check every single time
-    //         // our overall pos
-    //         // if(u_BlockPos !== null) gl.uniform3f(u_BlockPos, chunkX, chunkY, chunkZ);
+    // render(stuff: MyGlStuff, chunkX: number, chunkY: number, chunkZ: number): void {
+    //     const { gl, program: { uniform: { u_ModelMat }, attrib: { a_Position, a_UV, a_Normal } } } = stuff;
+    //     if(u_ModelMat !== null) {
     //         this.mat.setInPlace(
     //             1, 0, 0, chunkX,
     //             0, 1, 0, chunkY,
     //             0, 0, 1, chunkZ,
     //             0, 0, 0, 1,
     //         );
-    //         if(u_ModelMat !== null) gl.uniformMatrix4fv(u_ModelMat, false, this.mat.data);
-
-    //         // render
-    //         if(debugToggles.has('render_wireframe')) {
-    //             gl.drawElements(gl.LINES, this.numIndices, gl.UNSIGNED_SHORT, 0);
-    //         } else {
-    //             gl.drawElements(gl.TRIANGLES, this.numIndices, gl.UNSIGNED_SHORT, 0);
-    //         }
-    //     } else {
-    //         warnRateLimited(`skipping render of vchunk ${chunkX},${chunkY},${chunkZ} as it has no mesh`);
+    //         gl.uniformMatrix4fv(u_ModelMat, false, this.mat.data);
     //     }
+    //     this.geometry.render(stuff);
+
+    // //     if(this.meshVerts !== null && this.meshIndices !== null && this.meshUVs !== null && this.meshNormals !== null) {
+    // //         if(a_Position !== null) {
+    // //             gl.bindBuffer(gl.ARRAY_BUFFER, this.meshVerts);
+    // //             gl.enableVertexAttribArray(a_Position);
+    // //             gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+    // //         }
+    // //         if(a_UV !== null) {
+    // //             gl.bindBuffer(gl.ARRAY_BUFFER, this.meshUVs);
+    // //             gl.enableVertexAttribArray(a_UV);
+    // //             gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
+    // //         }
+    // //         if(a_Normal !== null) {
+    // //             gl.bindBuffer(gl.ARRAY_BUFFER, this.meshNormals);
+    // //             gl.enableVertexAttribArray(a_Normal);
+    // //             gl.vertexAttribPointer(a_Normal, 3, gl.FLOAT, false, 0, 0);
+    // //         }
+    // //         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.meshIndices);
+
+    // //         // TODO probably rename BlockPos to something more general like Offset or whatever
+    // //         // TODO should probably add helpers for setting these rather than doing the null check every single time
+    // //         // our overall pos
+    // //         // if(u_BlockPos !== null) gl.uniform3f(u_BlockPos, chunkX, chunkY, chunkZ);
+    // //         this.mat.setInPlace(
+    // //             1, 0, 0, chunkX,
+    // //             0, 1, 0, chunkY,
+    // //             0, 0, 1, chunkZ,
+    // //             0, 0, 0, 1,
+    // //         );
+    // //         if(u_ModelMat !== null) gl.uniformMatrix4fv(u_ModelMat, false, this.mat.data);
+
+    // //         // render
+    // //         if(debugToggles.has('render_wireframe')) {
+    // //             gl.drawElements(gl.LINES, this.numIndices, gl.UNSIGNED_SHORT, 0);
+    // //         } else {
+    // //             gl.drawElements(gl.TRIANGLES, this.numIndices, gl.UNSIGNED_SHORT, 0);
+    // //         }
+    // //     } else {
+    // //         warnRateLimited(`skipping render of vchunk ${chunkX},${chunkY},${chunkZ} as it has no mesh`);
+    // //     }
+    // // }
     // }
-    }
 }

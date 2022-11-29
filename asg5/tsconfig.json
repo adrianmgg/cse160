@@ -2,7 +2,7 @@
     "include": ["src/ts/**/*.ts"],
     "compilerOptions": {
         "target": "ES2019",
-        // moduleResolution
+        "moduleResolution": "node",
         "module": "es6",
         "outDir": "./src/js/",
         "incremental": true,

@@ -1,5 +1,5 @@
-import { debugToggles } from "./debug_toggles.js";
-import { assert, isPow2, setFind, setMap, warnRateLimited } from "./util.js";
+import { debugToggles } from "./debug_toggles";
+import { assert, isPow2, setFind, setMap, warnRateLimited } from "./util";
 
 function loadImgFromPath(path: string): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {

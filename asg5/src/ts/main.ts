@@ -1,6 +1,7 @@
 import { AmbientLight, BoxGeometry, Euler, Mesh, MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, PointLight, Scene, Vector3, WebGLRenderer } from 'three';
 import { getElementByIdAndValidate } from './util';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
+import { MCWorld } from './mc';
 
 class KeysManager {
     private _prevHeldKeys: Set<string>;
@@ -42,7 +43,7 @@ class KeysManager {
     }
 }
 
-function main() {
+async function main() {
     const rendererContainer = getElementByIdAndValidate('renderer_container', { document });
     const clickToPlayElem = getElementByIdAndValidate('click_to_play', { document });
 
@@ -51,6 +52,9 @@ function main() {
     const renderer = new WebGLRenderer();
 
     const keysManager = new KeysManager();
+
+    const world = await MCWorld.openWorld('new world');
+    scene.add(world);
 
     // const controls = new FirstPersonControls(camera, rendererContainer);
     // controls.enabled = false;
@@ -89,15 +93,34 @@ function main() {
     controls.addEventListener('unlock', (ev) => {
         clickToPlayElem.style.display = '';
         lastLockTime = performance.now();
+        keysManager.clear();
     });
     controls.connect();
     scene.add(controls.getObject());
-    document.addEventListener('keydown', (ev) => {
-        if(controls.isLocked) keysManager.down(ev.code);
-    });
-    document.addEventListener('keyup', (ev) => {
-        if(controls.isLocked) keysManager.up(ev.code);
-    });
+    window.addEventListener('keydown', (ev) => {
+        if(controls.isLocked) {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            ev.stopPropagation();
+            keysManager.down(ev.code);
+        }
+    }, { capture: true, passive: false });
+    window.addEventListener('keyup', (ev) => {
+        if(controls.isLocked) {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            ev.stopPropagation();
+            keysManager.up(ev.code);
+        }
+    }, { capture: true, passive: false });
+    window.addEventListener('keypress', (ev) => {
+        if(controls.isLocked) {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            ev.stopPropagation();
+        }
+    }, { capture: true, passive: false });
+    //@ts-ignore-next-error
     controls.pointerSpeed = 1.5;
 
     function rendererResize() {
@@ -131,11 +154,13 @@ function main() {
 
     const baseMoveSpeed = 5.0;
     let lastTickTime: number | DOMHighResTimeStamp = performance.now();
+    let fastMove = false;
     function renderTick(time: DOMHighResTimeStamp) {
         const delta = time - lastTickTime;
         // ====
-        renderer.render(scene, camera);
         let moveSpeed = baseMoveSpeed * (delta / 1000);
+        if(keysManager.isPressed('Backquote')) fastMove = !fastMove;
+        if(fastMove) moveSpeed *= 4;
         const movementDelta = new Vector3(0, 0, 0);
         if(keysManager.isHeld('KeyW')) movementDelta.z -= 1;
         if(keysManager.isHeld('KeyS')) movementDelta.z += 1;
@@ -152,11 +177,25 @@ function main() {
             .add(tmpvec.copy(camera.up).multiplyScalar(movementDelta.y));
         camera.position.add(movvec);
         // ====
+        world.rebuildMeshes();
+        // ====
+        renderer.render(scene, camera);
+        // ====
         lastTickTime = time;
         keysManager.tick();
         requestAnimationFrame(renderTick);
     }
+    // @ts-expect-error
+    window.world = world; window.scene = scene;
+
+    async function serverTick() {
+        world.updatePlayerPos(camera.position);
+        await world.serverTick();
+        setTimeout(serverTick, 0);
+    }
+
     renderTick(performance.now());
+    setTimeout(serverTick, 0);
 }
 
 window.addEventListener('DOMContentLoaded', (ev) => {

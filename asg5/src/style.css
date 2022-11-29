@@ -1,0 +1,32 @@
+
+html {
+    width: 100%;
+    height: 100%;
+    margin: 0px;
+    padding: 0px;
+}
+
+body {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 8px;
+    margin: 0px;
+}
+
+#renderer_container {
+    width: 100%;
+    height: 50%;
+    position: relative;
+}
+
+#click_to_play {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #0008;
+    color: #eee;
+    font-size: 1.5em;
+}

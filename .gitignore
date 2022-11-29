@@ -9,5 +9,8 @@
 /asg4/src/js/**/*
 /asg4/.vscode/
 
+/asg5/.vscode/
+/asg5/src/build/**/*
+
 *.zip
 

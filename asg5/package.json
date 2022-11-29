@@ -2,7 +2,7 @@
     "scripts": {
         "build": "node build.cjs",
         "watch": "npm run build -- --watch",
-        "serve": "npm run build && npx concurrently --names esbuild,live-server \"npm run watch\" \"npx live-server --open=src/asg5.html --watch=src/asg5.html,src/style.css,src/js,src/shaders,build.cjs --ignore=src/js/tsconfig.tsbuildinfo\""
+        "serve": "npm run build && npx concurrently --names esbuild,live-server \"npm run watch\" \"npx live-server --open=src/asg5.html --watch=src/asg5.html,src/style.css,src/build,src/shaders,build.cjs\""
     },
     "devDependencies": {
         "concurrently": "^7.5.0",

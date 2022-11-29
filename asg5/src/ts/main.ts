@@ -1,4 +1,4 @@
-import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from 'three';
+import { AmbientLight, BoxGeometry, Euler, Mesh, MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, PointLight, Scene, Vector3, WebGLRenderer } from 'three';
 import { getElementByIdAndValidate } from './util';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
 
@@ -31,6 +31,14 @@ class KeysManager {
     }
     up(key: string) {
         this._heldKeys.delete(key);
+    }
+
+    clear() {
+        this._heldKeys.clear();
+    }
+    forceClear() {
+        this._heldKeys.clear();
+        this._prevHeldKeys.clear();
     }
 }
 
@@ -85,10 +93,10 @@ function main() {
     controls.connect();
     scene.add(controls.getObject());
     document.addEventListener('keydown', (ev) => {
-        keysManager.down(ev.code);
+        if(controls.isLocked) keysManager.down(ev.code);
     });
     document.addEventListener('keyup', (ev) => {
-        keysManager.up(ev.code);
+        if(controls.isLocked) keysManager.up(ev.code);
     });
     controls.pointerSpeed = 1.5;
 
@@ -106,9 +114,14 @@ function main() {
 
     {
         const geom = new BoxGeometry(1, 1, 1);
-        const mat = new MeshBasicMaterial({color: 0xff00ff});
+        const mat = new MeshStandardMaterial({color: 0xff00ff});
         const cube = new Mesh(geom, mat);
         scene.add(cube);
+        const ambientLight = new AmbientLight(0xffffff, .2);
+        scene.add(ambientLight);
+        const light = new PointLight(0xffffff, 1, 100);
+        light.position.set(0, 10, 0);
+        scene.add(light);
     }
     // camera.position.z = 5;
     camera.position.z = 5;
@@ -130,9 +143,14 @@ function main() {
         if(keysManager.isHeld('KeyD')) movementDelta.x += 1;
         if(keysManager.isHeld('Space')) movementDelta.y += 1;
         if(keysManager.isHeld('ShiftLeft')) movementDelta.y -= 1;
-        movementDelta.normalize().multiplyScalar(moveSpeed).applyQuaternion(camera.quaternion);
-        camera.position.add(movementDelta);
-        // if(controls.enabled) controls.update(delta);
+        movementDelta.normalize().multiplyScalar(moveSpeed);
+        const movvec = new Vector3();
+        const tmpvec = new Vector3();
+        movvec
+            .add(tmpvec.setFromMatrixColumn(camera.matrix, 0).cross(camera.up).multiplyScalar(movementDelta.z))
+            .add(tmpvec.setFromMatrixColumn(camera.matrix, 0).multiplyScalar(movementDelta.x))
+            .add(tmpvec.copy(camera.up).multiplyScalar(movementDelta.y));
+        camera.position.add(movvec);
         // ====
         lastTickTime = time;
         keysManager.tick();

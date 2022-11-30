@@ -1,4 +1,4 @@
-import { CanvasTexture, NearestFilter, NearestMipMapLinearFilter, RepeatWrapping, Texture, UVMapping } from "three";
+import { CanvasTexture, ClampToEdgeWrapping, NearestFilter, NearestMipMapLinearFilter, RepeatWrapping, Texture, UVMapping } from "three";
 import { debugToggles } from "./debug_toggles";
 import { assert, isPow2, setFind, setMap, warnRateLimited } from "./util";
 
@@ -36,10 +36,10 @@ export type TextureAtlasInfo = {
 
 type AtlasBuilderInputItem = readonly [name: string, img: HTMLImageElement];
 
-export function atlasImages(images: AtlasBuilderInputItem[], initialAtlasSize: number = 128): TextureAtlasInfo {
+export function atlasImages(images: AtlasBuilderInputItem[], { margin = 0, initialAtlasSize = 128 }: { margin?: number, initialAtlasSize?: number } = {}): TextureAtlasInfo {
     let atlasSize: number = initialAtlasSize;
     let ret: TextureAtlasInfo | null;
-    while((ret = atlasImages_(images, atlasSize)) === null) {
+    while((ret = atlasImages_(images, atlasSize, margin)) === null) {
         console.warn(`${atlasSize}x${atlasSize} atlas was too small to store all of the provided textures, trying the next size up.`);
         atlasSize *= 2;
     }
@@ -154,7 +154,7 @@ class RectPacker<T> {
     }
 }
 
-function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number, margin: number = 16): TextureAtlasInfo | null {
+function atlasImages_(images: AtlasBuilderInputItem[], atlasSize: number, margin: number): TextureAtlasInfo | null {
     assert(isPow2(atlasSize), 'texture atlas dimension must be a power of 2');
     const atlasPack = new RectPacker<AtlasBuilderInputItem>(atlasSize, atlasSize);
 
@@ -276,8 +276,8 @@ export function atlasTo3JS(atlas: TextureAtlasInfo): Texture {
     // TODO make the filters configurable
     tex.magFilter = NearestFilter;
     tex.minFilter = NearestMipMapLinearFilter;
-    tex.wrapS = RepeatWrapping;
-    tex.wrapT = RepeatWrapping;
+    tex.wrapS = ClampToEdgeWrapping;
+    tex.wrapT = ClampToEdgeWrapping;
     tex.needsUpdate = true;
     tex.mapping = UVMapping;
     return tex;

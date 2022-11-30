@@ -59,7 +59,21 @@ async function main() {
 
     const keysManager = new KeysManager();
 
-    const atlas = atlasImages(await imagesPromise);
+    const atlas = atlasImages(await imagesPromise, { initialAtlasSize: 2 });
+    // show atlas (TODO: probably move this elsewhere)
+    {
+        const atlasDisplayContainer = getElementByIdAndValidate('atlas_display_container');
+        // TODO temp debug thing, move this somewhere else
+        for(const [level, tex] of atlas.textures) {
+            atlasDisplayContainer.appendChild(tex as HTMLCanvasElement);
+            Object.assign((tex as HTMLCanvasElement).style, {
+                width:  `${atlas.width}px`,
+                height: `${atlas.width}px`,
+                imageRendering: 'pixelated',
+                border: (level <= atlas.maxMipLevel)  ? '2px solid #0000' : '2px solid #F00',
+            });
+        }
+    }
 
     const world = await MCWorld.openWorld('new world', atlas);
     scene.add(world);

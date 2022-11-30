@@ -615,13 +615,12 @@ export class VChunk extends Mesh {
                             }
                         }
                         elemIdx += faceVerts.length;
-                        // const tex = getTextureFor(block, face, atlas);
-                        const tex = new DOMRectReadOnly(0, .5, .5, .5);
+                        const tex = getTextureFor(block, face, atlas);
                         uvs.push(
-                            tex.left , tex.top   ,
-                            tex.right, tex.top   ,
-                            tex.right, tex.bottom,
-                            tex.left , tex.bottom,
+                            tex.left , 1 - tex.top   ,
+                            tex.right, 1 - tex.top   ,
+                            tex.right, 1 - tex.bottom,
+                            tex.left , 1 - tex.bottom,
                         );
                         for(const norm of VChunk.CUBE_FACE_NORMALS[face]) {
                             normals.push(...norm);

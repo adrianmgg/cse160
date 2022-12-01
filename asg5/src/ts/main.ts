@@ -222,6 +222,7 @@ async function main() {
         pointLight.position.set(0, 10, 0);
         scene.add(pointLight);
         const spotlight = new SpotLight(0xffffff, 1, 30, Math.PI * (3/16), .1);
+        spotlight.visible = false;
         // const spotlightTarget = new Object3D();
         scene.add(spotlight);
         // scene.add(spotlightTarget);
@@ -261,6 +262,8 @@ async function main() {
         if(keysManager.isKeyHeld('Space')) movementDelta.y += 1;
         if(keysManager.isKeyHeld('ShiftLeft')) movementDelta.y -= 1;
         if(keysManager.isKeyPressed('KeyF')) spotlight.visible = !spotlight.visible;
+        if(keysManager.isKeyPressed('Equal')) world.renderDistance += 1;
+        if(keysManager.isKeyPressed('Minus')) world.renderDistance = Math.max(0, world.renderDistance - 1);
         movementDelta.normalize().multiplyScalar(moveSpeed);
         const movvec = new Vector3();
         const tmpvec = new Vector3();

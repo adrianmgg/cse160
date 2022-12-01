@@ -56,7 +56,7 @@ enum MCWorldCollisionLayer {
 export class MCWorld extends Object3D {
     private readonly db: IDBDatabase;
     private readonly chunks: Dict2D<number, number, Chunk>;
-    private readonly renderDistance: number = 2;
+    renderDistance: number = 2;
     private readonly noise: NoiseFunction3D;
     readonly blocksMat: Material;
     readonly atlas: TextureAtlasInfo;

@@ -3,7 +3,7 @@ import { assert, debugAssert, Dict2D, mapRecord, NTupleOf, warnRateLimited } fro
 import { atlasTo3JS, TextureAtlasInfo } from './texture';
 import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 import { debugToggles } from './debug_toggles';
-import { BoxGeometry, BufferAttribute, BufferGeometry, Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, Vector3 } from 'three';
+import { BoxGeometry, BufferAttribute, BufferGeometry, EdgesGeometry, Event, Intersection, LineBasicMaterial, LineSegments, Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera, Raycaster, Vector3 } from 'three';
 import alea from 'alea';
 import { backwardsVec, downVec, forwardsVec, leftVec, rightVec, upVec } from './threeutil';
 
@@ -17,6 +17,8 @@ export enum Block {
     COBBLESTONE = 4,
     BEDROCK = 7,
 }
+
+const PLACEABLE_BLOCKS = [Block.STONE, Block.GRASS, Block.DIRT, Block.COBBLESTONE, Block.BEDROCK] as const;
 
 enum CubeFace { FRONT = 0, RIGHT = 1, UP = 2, LEFT = 3, DOWN = 4, BACK = 5 };
 
@@ -45,6 +47,12 @@ function getTextureFor(block: Block, face: CubeFace, atlas: TextureAtlasInfo): D
     return _getTextureFor(block, face, atlas) ?? new DOMRectReadOnly();
 }
 
+enum MCWorldCollisionLayer {
+    DEFAULT = 0,
+    BLOCKS  = 1,
+    IGNORE  = 2,
+};
+
 export class MCWorld extends Object3D {
     private readonly db: IDBDatabase;
     private readonly chunks: Dict2D<number, number, Chunk>;
@@ -53,6 +61,8 @@ export class MCWorld extends Object3D {
     readonly blocksMat: Material;
     readonly atlas: TextureAtlasInfo;
     // readonly worldObjects: Model[]; // TODO clean this system up
+    camera: PerspectiveCamera | null = null;
+    private readonly blockSelectObject: Object3D;
 
     private constructor(db: IDBDatabase, atlas: TextureAtlasInfo) {
         super();
@@ -60,8 +70,13 @@ export class MCWorld extends Object3D {
         this.chunks = new Dict2D();
         this.noise = createNoise3D(alea('seed')); // TODO add seed option
         this.atlas = atlas;
-        // this.blocksMat = new MeshStandardMaterial({color: 0xffffff, map: atlasTo3JS(atlas) });
-        this.blocksMat = new MeshBasicMaterial({map: atlasTo3JS(atlas)});
+        this.blocksMat = new MeshStandardMaterial({color: 0xffffff, map: atlasTo3JS(atlas) });
+        const blockSelectSize = 1 + 1e-2;
+        this.blockSelectObject = new LineSegments(new EdgesGeometry(new BoxGeometry(blockSelectSize, blockSelectSize, blockSelectSize).translate(0.5, 0.5, 0.5)), new LineBasicMaterial({ color: 0xff0000, linewidth: 2 }));
+        this.blockSelectObject.layers.set(MCWorldCollisionLayer.IGNORE);
+        this.add(this.blockSelectObject);
+        this.blockSelectObject.visible = false;
+        // this.blocksMat = new MeshBasicMaterial({map: atlasTo3JS(atlas)});
         // this.worldObjects = [];
     }
 
@@ -245,6 +260,54 @@ export class MCWorld extends Object3D {
         await this.loadChunksJob.next();
     }
 
+    tryBreakBlock: boolean = false; // TODO these need some kinda refactor
+    tryPlaceBlock: boolean = false;
+    private _curPlaceBlockIdx: number = 0;
+    nextBlock() { this._curPlaceBlockIdx = (this._curPlaceBlockIdx + 1) % PLACEABLE_BLOCKS.length; }
+    prevBlock() { this._curPlaceBlockIdx = (this._curPlaceBlockIdx + PLACEABLE_BLOCKS.length - 1) % PLACEABLE_BLOCKS.length; }
+    private readonly _raycaster = new Raycaster();
+    private readonly _raycastIntersections: Intersection<Object3D<Event>>[] = [];
+    clientTick() {
+        if(this.camera !== null) {
+            this._raycaster.near = 0;
+            this._raycaster.far = 64;
+            this._raycaster.layers.disableAll();
+            this._raycaster.layers.enable(MCWorldCollisionLayer.BLOCKS);
+            this.camera.getWorldPosition(this._raycaster.ray.origin);
+            this.camera.getWorldDirection(this._raycaster.ray.direction);
+            this._raycastIntersections.length = 0;
+            this._raycaster.intersectObject(this, true, this._raycastIntersections);
+            const hit = this._raycastIntersections[0];
+            if(hit !== undefined) {
+                const vchunk = hit.object;
+                assert(vchunk instanceof VChunk);
+                assert(hit.faceIndex !== undefined);
+                const hitBlockPos = vchunk.faceIndexToBlockPos(hit.faceIndex);
+                this.blockSelectObject.position.copy(hitBlockPos);
+                // const hitpos = hit.point.clone(); // TODO avoid clone
+                // hitpos.round();
+                // this.blockSelectObject.position.copy(hitpos);
+                this.blockSelectObject.visible = true;
+                if(this.tryBreakBlock) {
+                    this.setBlock(hitBlockPos.x, hitBlockPos.y, hitBlockPos.z, Block.AIR);
+                }
+                if(this.tryPlaceBlock) {
+                    const placeBlockPos = hitBlockPos.clone(); // TODO avoid clone
+                    const hitNormal = hit.face?.normal;
+                    assert(hitNormal !== undefined);
+                    placeBlockPos.add(hitNormal.clone().round());
+                    this.setBlock(placeBlockPos.x, placeBlockPos.y, placeBlockPos.z, PLACEABLE_BLOCKS[this._curPlaceBlockIdx]!);
+                }
+            } else {
+                this.blockSelectObject.visible = false;
+            }
+        } else {
+            this.blockSelectObject.visible = false;
+        }
+        this.tryBreakBlock = false;
+        this.tryPlaceBlock = false;
+    }
+
     private getBlock(x: number, y: number, z: number): Block {
         if(y < 0 || y > 255) return Block.AIR;
         const cX = Math.floor(x / 16);
@@ -370,8 +433,7 @@ export class Chunk extends Object3D {
     private getOrCreateVChunk(material: Material, vChunkY: number): VChunk {
         const existingVC = this.getVChunk(vChunkY);
         if(existingVC !== null) return existingVC;
-        const newVC = this.vChunks[vChunkY] = VChunk.newVChunk(material);
-        newVC.position.y = vChunkY * 16;
+        const newVC = this.vChunks[vChunkY] = VChunk.newVChunk(vChunkY, material);
         this.add(newVC);
         return newVC;
     }
@@ -444,8 +506,7 @@ export class Chunk extends Object3D {
     static fromDB(world: MCWorld, data: DBChunkData): Chunk {
         return new Chunk(world, data.chunkPos[0], data.chunkPos[1], data.vChunks.map((vc, i) => {
             if(vc === null) return null;
-            const vChunk = VChunk.fromDB(world.blocksMat, vc);
-            vChunk.position.y = i * 16;
+            const vChunk = VChunk.fromDB(i, world.blocksMat, vc);
             return vChunk;
         }) as NTupleOf<VChunk | null, 16>);
     }
@@ -492,12 +553,23 @@ export class VChunk extends Mesh {
     // private geometry: BufferGeometry;
     /* whether the mesh is out of sync with the current block data */
     private meshDirty: boolean;
+    private _faceidxToBlockIdx: number[] = [];
+    readonly vChunkY: number;
 
-    constructor(material: Material, blockData: Uint8Array) {
+    constructor(vChunkY: number, material: Material, blockData: Uint8Array) {
         super(new BufferGeometry(), material);
+        this.vChunkY = vChunkY;
         this.blockData = blockData;
         this.meshDirty = true;
-        // this.mat = Mat4x4.identity();
+        this.layers.set(MCWorldCollisionLayer.BLOCKS);
+        this.position.y += vChunkY * 16;
+    }
+
+    getChunk(): Chunk {
+        const parent = this.parent;
+        assert(parent !== null, "can't get vchunk's chunk because it doesn't have a parent object");
+        assert(parent instanceof Chunk, "vchunk was attached to non-chunk parent");
+        return parent;
     }
 
     private static blockIdx(x: number, y: number, z: number): number {
@@ -505,6 +577,17 @@ export class VChunk extends Mesh {
         debugAssert(0 <= y && y < 16, 'vchunk block index y out if range');
         debugAssert(0 <= z && z < 16, 'vchunk block index z out if range');
         return (x << 0) + (y << 8) + (z << 4);
+    }
+    private static blockIdxToLocalPos(blockIdx: number): Vector3 {
+        return new Vector3(blockIdx & 0b1111, (blockIdx >> 8) & 0b1111, (blockIdx >> 4) & 0b1111);
+    }
+    private blockIdxToWorldPos(blockIdx: number): Vector3 {
+        const vec = VChunk.blockIdxToLocalPos(blockIdx);
+        vec.y += this.vChunkY * 16;
+        const chunk = this.getChunk();
+        vec.x += chunk.chunkX * 16;
+        vec.z += chunk.chunkZ * 16;
+        return vec;
     }
 
     getBlock(x: number, y: number, z: number): Block {
@@ -525,12 +608,12 @@ export class VChunk extends Mesh {
         this.meshDirty = true;
     }
 
-    static newVChunk(material: Material): VChunk {
-        return new VChunk(material, new Uint8Array(16 * 16 * 16));
+    static newVChunk(vChunkY: number, material: Material): VChunk {
+        return new VChunk(vChunkY, material, new Uint8Array(16 * 16 * 16));
     }
 
-    static fromDB(material: Material, data: DBVChunkData): VChunk {
-        return new VChunk(material, data);
+    static fromDB(vChunkY: number, material: Material, data: DBVChunkData): VChunk {
+        return new VChunk(vChunkY, material, data);
     }
 
     toDB(): DBVChunkData {
@@ -589,6 +672,7 @@ export class VChunk extends Mesh {
         const indices: number[] = [];
         const uvs: number[] = [];
         const normals: number[] = [];
+        const faceidxToBlockIdx: number[] = [];
         let elemIdx = 0;
         for(let x = 0; x < 16; x++) {
             for(let y = 0; y < 16; y++) {
@@ -625,6 +709,9 @@ export class VChunk extends Mesh {
                         for(const norm of VChunk.CUBE_FACE_NORMALS[face]) {
                             normals.push(...norm);
                         }
+                        for(let i = 0; i < 2; i++) {
+                            faceidxToBlockIdx.push(VChunk.blockIdx(x, y, z));
+                        }
                     }
                 }
             }
@@ -648,7 +735,14 @@ export class VChunk extends Mesh {
         // TODO we can probably do the bounds calc more efficiently if we roll it ourselves
         this.geometry.computeBoundingBox();
         this.geometry.computeBoundingSphere();
+        this._faceidxToBlockIdx = faceidxToBlockIdx;
         this.meshDirty = false;
+    }
+
+    faceIndexToBlockPos(idx: number): Vector3 {
+        const blockIdx = this._faceidxToBlockIdx[idx];
+        assert(blockIdx !== undefined);
+        return this.blockIdxToWorldPos(blockIdx);
     }
 
     dispose() {

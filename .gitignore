@@ -3,14 +3,14 @@
 
 /**/node_modules/**/*
 
-/asg3/src/js/**/*
+#/asg3/src/js/**/*
 /asg3/.vscode/
 
-/asg4/src/js/**/*
+#/asg4/src/js/**/*
 /asg4/.vscode/
 
 /asg5/.vscode/
-/asg5/src/build/**/*
+#/asg5/src/build/**/*
 
 *.zip
 
